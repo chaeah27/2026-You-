@@ -82,22 +82,27 @@ function sessionViews(){
  const records=db.sessions||[];
  const participants=[...new Set(records.map(x=>String(x.code||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'ko'));
  const environments=[...new Map(records.filter(x=>x.sensoryId||x.sensoryName||x.condition).map(x=>[x.sensoryId||'name:'+String(x.sensoryName||x.condition),{id:x.sensoryId||'name:'+String(x.sensoryName||x.condition),name:x.sensoryName||x.condition||'미지정',type:x.sensoryType||stageToSensory(x.stage)||''}])).values()];
- return '<section class="panel"><h2>참가자별 세션 기록</h2><p class="muted">익명 참가자 코드를 선택하면 해당 참가자의 1차·2차 실험 기록만 조회합니다.</p><div class="actions"><select id="session-participant-filter" style="max-width:260px" aria-label="참가자 코드 선택">'+sessionSelectorOptions(participants,'참가자 선택')+'</select><select id="session-participant-stage" style="max-width:180px" aria-label="실험 차수 선택"><option value="">전체 실험</option><option value="1차">1차</option><option value="2차">2차</option><option value="예비">예비실험</option></select></div><div id="session-participant-results" style="margin-top:14px"></div></section>'+
- '<section class="panel"><h2>감각 환경별 반응 비교</h2><p class="muted">환경을 선택하면 그 환경에서 실험한 참가자, 전후 느낌과 정서, 대화 상대·주제를 함께 비교할 수 있습니다.</p><div class="actions"><select id="session-environment-filter" aria-label="감각 환경 선택" style="max-width:340px"><option value="">감각 환경 선택</option>'+environments.map(x=>'<option value="'+esc(x.id)+'">'+esc(sensoryLabel(x.type)+' · '+x.name)+'</option>').join('')+'</select><select id="session-environment-stage" aria-label="실험 차수 선택" style="max-width:180px"><option value="">전체 실험</option><option value="1차">1차</option><option value="2차">2차</option><option value="예비">예비실험</option></select></div><div id="session-environment-results" style="margin-top:14px"></div></section>';
+ return '<div class="session-compare-grid"><section class="panel session-compare-panel"><h2>참가자별 세션 기록</h2><p class="muted">익명 참가자 코드를 선택하면 해당 참가자의 1차·2차 실험 기록만 조회합니다.</p><div class="actions"><select id="session-participant-filter" style="max-width:260px" aria-label="참가자 코드 선택">'+sessionSelectorOptions(participants,'참가자 선택')+'</select><select id="session-participant-stage" style="max-width:180px" aria-label="실험 차수 선택"><option value="">전체 실험</option><option value="1차">1차</option><option value="2차">2차</option><option value="예비">예비실험</option></select></div><div id="session-participant-results" style="margin-top:14px"></div></section>'+
+ '<section class="panel session-compare-panel"><h2>감각 환경별 반응 비교</h2><p class="muted">환경을 선택하면 그 환경에서 실험한 참가자, 전후 느낌과 정서, 대화 상대·주제를 함께 비교할 수 있습니다.</p><div class="actions"><select id="session-environment-filter" aria-label="감각 환경 선택" style="max-width:340px"><option value="">감각 환경 선택</option>'+environments.map(x=>'<option value="'+esc(x.id)+'">'+esc(sensoryLabel(x.type)+' · '+x.name)+'</option>').join('')+'</select><select id="session-environment-stage" aria-label="실험 차수 선택" style="max-width:180px"><option value="">전체 실험</option><option value="1차">1차</option><option value="2차">2차</option><option value="예비">예비실험</option></select></div><div id="session-environment-results" style="margin-top:14px"></div></section></div>';
 }
 function stageMatches(stage,prefix){return !prefix||String(stage||'').startsWith(prefix)}
 function numberSummary(items,key){const xs=items.map(x=>x[key]).filter(v=>v!==''&&v!==null&&v!==undefined&&Number.isFinite(Number(v))).map(Number);return xs.length?(xs.reduce((a,b)=>a+b,0)/xs.length).toFixed(2):'—'}
 function resultTable(items){
  if(!items.length)return '<div class="empty">해당 조건의 기록이 없습니다.</div>';
- const rows=items.slice().reverse().map(x=>'<tr>'+[
- x.date||'—',x.code||'—',x.stage||'—',x.sensoryName||x.condition||'미지정',x.preFeeling||'—',x.postFeeling||'—',
- (x.preValence||'—')+' → '+(x.valence||'—'),(x.preArousal||'—')+' → '+(x.arousal||'—'),
- x.hr||'—',x.eda||'—',x.partner||'—',x.conversationTopic||'—',x.liking||'—'
- ].map(v=>'<td style="white-space:pre-wrap">'+esc(v)+'</td>').join('')+'</tr>').join('');
- return '<div class="session-metrics">'+[
- ['세션 수',String(items.length)],['쾌·불쾌 평균',numberSummary(items,'valence')],['각성 평균',numberSummary(items,'arousal')],['심박수 평균',numberSummary(items,'hr')],['대인 호감 평균',numberSummary(items,'liking')]
- ].map(([name,v])=>'<div class="stat"><div class="label">'+name+'</div><div class="num">'+v+'</div></div>').join('')+'</div>'+
- '<div class="tablewrap"><table><thead><tr>'+['날짜','참가자','실험 단계','감각 환경','자극 전 느낌','자극 후 느낌','쾌·불쾌 전 → 후','각성 전 → 후','HR(bpm)','GSR(µS)','대화 상대','대화 주제','대인 호감'].map(t=>'<th>'+t+'</th>').join('')+'</tr></thead><tbody>'+rows+'</tbody></table></div>';
+ const measures=[['세션 수',String(items.length)],['쾌·불쾌 평균',numberSummary(items,'valence')],['각성 평균',numberSummary(items,'arousal')],['심박수 평균',numberSummary(items,'hr')],['대인 호감 평균',numberSummary(items,'liking')]];
+ const cards=items.slice().reverse().map(x=>
+   '<article class="session-result-card"><div class="session-result-title"><strong>'+esc(x.code||'—')+'</strong><span>'+esc(x.date||'—')+' · '+esc(x.stage||'—')+'</span></div>'+
+   '<div class="session-result-environment">'+esc(x.sensoryName||x.condition||'감각 환경 미지정')+'</div>'+
+   '<div class="session-result-grid">'+[
+    ['자극 전 느낌',x.preFeeling||'—'],['자극 후 느낌',x.postFeeling||'—'],
+    ['쾌·불쾌 전 → 후',(x.preValence||'—')+' → '+(x.valence||'—')],
+    ['각성 전 → 후',(x.preArousal||'—')+' → '+(x.arousal||'—')],
+    ['평균 심박수',x.hr?x.hr+' bpm':'—'],['GSR 추정',x.eda?x.eda+' µS':'—'],
+    ['대화 상대',x.partner||'—'],['대화 주제',x.conversationTopic||'—'],
+    ['대인 호감',x.liking||'—']
+   ].map(([label,value])=>'<div class="session-result-detail"><small>'+label+'</small><span>'+esc(value)+'</span></div>').join('')+'</div></article>'
+ ).join('');
+ return '<div class="session-compact-metrics">'+measures.map(([name,v])=>'<div class="stat"><div class="label">'+name+'</div><div class="num">'+v+'</div></div>').join('')+'</div><div class="session-result-list">'+cards+'</div>';
 }
 function renderSessionViews(){
  const p=document.getElementById('session-participant-filter'),e=document.getElementById('session-environment-filter');
