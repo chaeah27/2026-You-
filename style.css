@@ -234,3 +234,31 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .lab-import-half .lab-import-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
 .lab-import-half .lab-import-heading{align-items:start}
 @media(max-width:850px){.lab-import-split{grid-template-columns:minmax(0,1fr)}}
+
+
+/* Full run segment comparison: mean, minimum, maximum */
+.segment-compare{background:#F6FAFD;border:1px solid #D9EAF6;border-radius:12px;padding:14px;min-width:0}
+.segment-compare-head{display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;margin-bottom:12px}
+.segment-compare-head h3{margin:0;font-size:16px;color:#243F60}
+.segment-compare-head span{font-size:11px;color:#698098}
+.segment-compare-table{width:100%;overflow-x:auto}
+.segment-compare-table table{min-width:370px;width:100%;border-collapse:collapse;font-size:12px}
+.segment-compare-table th,.segment-compare-table td{padding:9px 6px;border-bottom:1px solid #DCE8F1;text-align:right;white-space:nowrap}
+.segment-compare-table th:first-child{text-align:left;max-width:145px}
+.segment-compare-table th small{font-size:10px;color:#6B8294;display:block;max-width:130px;white-space:normal;overflow-wrap:anywhere;font-weight:400}
+.segment-compare-table thead th{color:#526F87;background:#EDF5FB}
+.segment-compare-chart{display:grid;gap:12px;margin-top:16px}
+.segment-compare-row{display:grid;grid-template-columns:minmax(60px,90px) minmax(0,1fr);align-items:start;gap:10px}
+.segment-compare-label{display:flex;flex-direction:column;min-width:0}
+.segment-compare-label strong{font-size:15px;color:#243F60}
+.segment-compare-label small{font-size:10px;color:#6B8294;overflow-wrap:anywhere}
+.segment-compare-bars{display:grid;gap:5px}
+.segment-compare-barline{display:grid;grid-template-columns:42px minmax(0,1fr) 44px;align-items:center;gap:6px;font-size:10px;color:#6B8294}
+.segment-compare-barline b{color:#243F60;text-align:right;font-size:11px}
+.segment-compare-track{background:#E5EEF6;border-radius:5px;height:9px;overflow:hidden}
+.segment-compare-fill{height:100%;border-radius:5px;background:#79B6DB}
+.segment-compare-fill.min{background:#AFCCE3}
+.segment-compare-fill.avg{background:#427AA8}
+.segment-compare-fill.max{background:#243F60}
+.segment-compare-note{font-size:11px;margin:12px 0 0}
+@media(max-width:550px){.segment-compare{padding:10px}.segment-compare-row{grid-template-columns:58px minmax(0,1fr);gap:6px}.segment-compare-barline{grid-template-columns:39px minmax(0,1fr) 42px;gap:4px}}
