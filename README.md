@@ -1,4 +1,4 @@
-# 유리프 연구 아카이브 | YURIF Research Archive
+# 유레카 리서치 프로그램 연구 아카이브 | Eureka Research Program Archive
 
 학교 감각 환경(시각·청각·후각), 정서(쾌·불쾌/각성), EDA·심박수, 실제 대화 및 대인 호감 연구를 체계적으로 기록하는 **GitHub Pages용 정적 사이트**입니다.
 
@@ -9,10 +9,10 @@
 - 세션 데이터는 CSV로도 추출할 수 있습니다.
 
 ## GitHub Pages에 게시
-1. GitHub에서 `yurif-research`라는 새 저장소를 만드세요.
+1. 현재 저장소 `chaeah27/2026-You-`를 사용합니다.
 2. 압축을 푼 폴더의 `index.html`, `style.css`, `app.js`, `README.md` 등을 저장소 **최상위 경로**에 업로드하세요.
 3. `Settings` → `Pages` → `Build and deployment` → `Deploy from a branch` → `main` / `/(root)` → `Save`.
-4. 공개 URL은 보통 `https://사용자명.github.io/yurif-research/` 형태입니다.
+4. 공개 URL은 보통 `https://chaeah27.github.io/2026-You-/` 형태입니다.
 
 ## 보안과 데이터 저장에 대한 경고
 - 브라우저에 적은 기록은 **그 브라우저의 localStorage에만 저장**됩니다. GitHub, 다른 컴퓨터, 다른 팀원과 **자동 동기화되지 않습니다**.
