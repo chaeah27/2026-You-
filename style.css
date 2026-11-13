@@ -185,3 +185,21 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .journal-edit-form{display:grid;gap:12px}
 @media(max-width:1200px){.journal-board-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:750px){.journal-board-grid{grid-template-columns:1fr}.journal-kpis{grid-template-columns:repeat(2,minmax(0,1fr))}.journal-hero{padding:20px}.journal-hero h2{font-size:19px}}
+
+
+/* Laboratory-to-session import */
+.lab-import-panel{border-color:#B7D5EE}
+.lab-import-panel .notice{font-size:12px;margin:12px 0 18px}
+.lab-import-panel form{display:grid;gap:14px}
+.lab-import-preview{border:1px solid #D9EAF6;border-radius:12px;padding:16px;background:#F6FAFD}
+.lab-import-heading{display:flex;gap:10px;align-items:center;justify-content:space-between;flex-wrap:wrap;margin-bottom:12px}
+.lab-import-heading strong{color:#243F60}
+.lab-import-heading span{color:#60778F;font-size:12px}
+.lab-import-metrics{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:9px}
+.lab-import-metrics>div{background:#fff;border:1px solid #D9EAF6;border-radius:9px;padding:10px;display:flex;flex-direction:column;min-width:0}
+.lab-import-metrics small{font-size:11px;color:#657F97}
+.lab-import-metrics strong{font-size:21px;overflow-wrap:anywhere;color:#243F60}
+.lab-import-extra{background:#F6FAFD;border:1px solid #D9EAF6;border-radius:12px;padding:13px}
+.lab-import-extra summary{cursor:pointer;color:#243F60;font-weight:700;margin-bottom:8px}
+.lab-import-extra .field{margin-top:10px}
+@media(max-width:650px){.lab-import-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
