@@ -1,4 +1,4 @@
-# 유레카 리서치 프로그램 연구 아카이브 | Eureka Research Program Archive
+# 유리프 연구 아카이브 | Eureka Research Program Archive
 
 학교 감각 환경(시각·청각·후각), 정서(쾌·불쾌/각성), EDA·심박수, 실제 대화 및 대인 호감 연구를 체계적으로 기록하는 **GitHub Pages용 정적 사이트**입니다.
 
