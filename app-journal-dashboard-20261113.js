@@ -57,7 +57,7 @@ function journalModal(){
 function journal(){
  const total=(db.journalBoard||[]),pending=total.filter(x=>!x.done);
  return head('연구 일지','메모, 다음 할 일, 준비물을 한눈에 정리하는 연구팀 작업 대시보드입니다.','02 / RESEARCH WORKSPACE')+
- '<div class="journal-dashboard-top"><div class="journal-hero"><div><p>RESEARCH WORKSPACE</p><h2>오늘의 연구를 정리해요</h2><span>펜 버튼을 눌러 새로운 내용을 작성하거나 수정할 수 있어요.</span></div><button type="button" class="btn" data-board-add="journal">✎ 연구 일지 작성</button></div>'+
+ '<div class="journal-dashboard-top"><div class="journal-hero"><div><h2>RESEARCH WORKSPACE</h2><span>펜 버튼을 눌러 새로운 내용을 작성하거나 수정할 수 있어요.</span></div><button type="button" class="btn" data-board-add="journal">✎ 연구 일지 작성</button></div>'+
  '<div class="journal-kpis"><div><small>남은 할 일</small><strong>'+pending.filter(x=>x.type==='todo').length+'</strong></div><div><small>준비할 것</small><strong>'+pending.filter(x=>x.type==='prep').length+'</strong></div><div><small>메모</small><strong>'+total.filter(x=>x.type==='memo').length+'</strong></div><div><small>연구 기록</small><strong>'+(db.journal||[]).length+'</strong></div></div></div>'+
  '<div class="journal-board-grid">'+journalBoardCard('memo','메모','아이디어와 중요한 내용을 빠르게 기록해요.','✎')+journalBoardCard('todo','다음 할 일','남은 연구 작업과 마감일을 관리해요.','✓')+journalBoardCard('prep','준비할 것','실험에 필요한 장비와 자료를 챙겨요.','▣')+'</div>'+journalArchive()+journalModal();
 }
