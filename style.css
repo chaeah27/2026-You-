@@ -44,3 +44,25 @@ code{background:#EDF5FB}
 .pill{background:#E2F2FD;color:#2C719B}
 .flowdots span{background:#E9F4FC}
 .flowdots b{color:#3D88B5}
+
+/* Yurif confirmed Sky Blue palette — 2026-11-13 */
+:root{--navy:#243F60;--navy2:#243F60;--ink:#243F60;--muted:#607C98;--line:#D9EAF6;--bg:#F4F8FC;--teal:#417EA9;--mint:#D9EAF6;--blue:#D9EAF6}
+.sidebar{background:#243F60;color:#FFFFFF}
+.mark{background:#79B6DB;color:#243F60}
+nav button.active,nav button:hover{background:#355B80;color:#FFFFFF}
+nav button.active{box-shadow:inset 3px 0 #79B6DB}
+.topbar{background:#FFFFFF}
+.chip,.card .tag,.pill,.stepno{background:#D9EAF6;color:#243F60}
+.smallbtn,.btn{background:#243F60;border-color:#243F60;color:#FFFFFF}
+.smallbtn:hover,.btn:hover{background:#355B80;border-color:#355B80}
+.btn.secondary{color:#243F60;border-color:#79B6DB;background:#FFFFFF}
+.hero{background:linear-gradient(120deg,#243F60,#355B80)}
+.hero .eyebrow{color:#D9EAF6}
+.hero p{color:#E8F3FC}
+.rings,.rings:before,.rings:after{border-color:#79B6DB88}
+.rings:after{background:#79B6DB22}
+.rings span{color:#D9EAF6}
+.stat,.panel,.tile,.card{border-color:#D9EAF6}
+.bar{background:#79B6DB}
+a{color:#285B84}
+input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6DB}
