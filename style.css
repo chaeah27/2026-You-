@@ -222,3 +222,15 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .lab-eda-preview{display:flex;flex-direction:column;gap:4px;border-top:1px solid #D9EAF6;margin-top:13px;padding-top:12px}
 .lab-eda-preview strong{font-size:16px;color:#243F60}
 .lab-eda-preview small{font-size:11px;color:#59758B}
+
+
+/* Equal-width official/pilot session import panels */
+.lab-import-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:18px;align-items:start;margin-bottom:20px}
+.lab-import-half{min-width:0}
+.lab-import-half>.panel{min-width:0;margin:0}
+.lab-import-half .formgrid{grid-template-columns:minmax(0,1fr)}
+.lab-import-half .field,.lab-import-half select,.lab-import-half input{min-width:0;max-width:100%}
+.lab-import-half .notice{overflow-wrap:anywhere}
+.lab-import-half .lab-import-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}
+.lab-import-half .lab-import-heading{align-items:start}
+@media(max-width:850px){.lab-import-split{grid-template-columns:minmax(0,1fr)}}
