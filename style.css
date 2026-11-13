@@ -124,3 +124,21 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .lab-archive-detail span{background:#F4F8FC;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:11px}
 @media(max-width:850px){.lab-editor-inputs{grid-template-columns:1fr}}
 @media(max-width:640px){.lab-editor-row{align-items:flex-start}.lab-timer{font-size:32px}.lab-segment{gap:8px}.lab-segment-state{font-size:10px}}
+
+
+/* Arduino GSR live capture controls */
+.gsr-panel{border-color:#B7D5EE}
+.gsr-live{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin:14px 0}
+.gsr-live>div{background:#F4F8FC;border:1px solid #D9EAF6;border-radius:12px;padding:15px;display:flex;flex-direction:column;gap:3px;min-width:0}
+.gsr-live strong{font-size:27px;color:#243F60;overflow-wrap:anywhere}
+.gsr-live small{font-size:11px;color:#617C94}
+.gsr-panel .notice{margin-bottom:0}
+.gsr-archive-actions{margin:12px 0 0}
+.gsr-archive-actions details{margin-top:12px}
+.gsr-archive-actions summary{color:#243F60;cursor:pointer;font-weight:600}
+.gsr-summary{padding:10px 0;border-top:1px solid var(--line)}
+.gsr-summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:7px;margin-top:7px}
+.gsr-summary-grid>div{background:#F4F8FC;border-radius:8px;padding:9px;display:flex;flex-direction:column}
+.gsr-summary-grid b{font-size:18px;color:#243F60}
+.gsr-summary-grid small{font-size:10px;color:#607B96}
+@media(max-width:640px){.gsr-live{grid-template-columns:1fr}.gsr-summary-grid{grid-template-columns:1fr}}
