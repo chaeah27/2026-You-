@@ -55,6 +55,7 @@ $('guest-refresh').addEventListener('click',()=>{watchPublic(true)});
 function cleanup(){
  state.unsubs.forEach(fn=>fn());state.unsubs=[];state.cache={};state.pending.clear();state.started=false;state.ready=false;state.member=null;
  window.yurifCloud.ready=false;window.yurifCloud.initialData=null;
+ clearTimeout(timer);state.queued=null;
  $('workspace').hidden=true;$('admin-drawer').hidden=true;
 }
 onAuthStateChanged(auth,async user=>{
@@ -69,6 +70,7 @@ onAuthStateChanged(auth,async user=>{
    show('login-screen');error('아직 승인된 연구팀 계정이 아닙니다. Firestore members 문서의 UID, role, active를 확인해 주세요.');return;
   }
   state.member=member;
+  try{const publicSnapshot=await getDoc(doc(store,'publicContent','site'));state.publicDoc=publicSnapshot.exists()?publicSnapshot.data():{sections:{}}}catch(ex){state.publicDoc={sections:{}}}
   $('cloud-user').textContent=user.email||'연구원';
   $('open-admin-settings').hidden=member.role!=='admin';
   error('공동 연구 기록 불러오는 중…');
@@ -97,7 +99,7 @@ onAuthStateChanged(auth,async user=>{
 });
 
 async function loadWorkspace(){
- if(window.yurifCloudGetData)return;
+ if(window.yurifCloudGetData){for(const type of types)window.yurifCloudApply(type,window.yurifCloud.initialData[type]||[]);return;}
  for(const src of ['app-cloud-ready-20261113.js','gsr-live-chart-20261113.js']){
   await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error(src+' 파일을 불러오지 못했습니다'));document.body.append(s)});
  }
