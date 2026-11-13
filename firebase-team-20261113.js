@@ -13,7 +13,7 @@ const firebaseConfig = {
 };
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app),store=getFirestore(app);
-const types=['journal','sessions','equipment','results','references','sensoryEnvironments','experimenters','pilotRuns','labRuns','journalBoard'];
+const types=['journal','sessions','equipment','results','references','sensoryEnvironments','experimenters','labRuns','journalBoard'];
 const choices=[
  ['home','연구 소개'],['protocol','실험 설계'],['equipment','장비 소개'],['journal','연구 일지 소개'],
  ['lab','실험 방법'],['sessions','실험 세션 소개'],['analysis','분석 결과'],['references','참고자료']
