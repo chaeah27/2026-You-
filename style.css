@@ -276,3 +276,50 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .gsr-chart-legend i.gsr-boundary-legend{height:15px;width:2px;border-radius:0;background:repeating-linear-gradient(to bottom,#D18556 0 4px,transparent 4px 7px)}
 .gsr-chart-box>.muted{font-size:11px;margin:8px 0 0}
 @media(max-width:650px){.gsr-chart-box{padding:11px}.gsr-chart-header h3{font-size:14px}}
+
+
+/* Firebase team gate, researcher authentication and curated public-only visitor view */
+[hidden]{display:none!important}
+.yurif-gate{min-height:100vh;padding:36px 22px;display:grid;place-items:center;background:radial-gradient(circle at 85% 15%,#DBECF7 0,transparent 36%),#F4F8FC;color:#243F60}
+.yurif-entrance{width:min(920px,100%)}
+.yurif-overline{margin:0 0 10px;color:#658EB0;font-weight:750;font-size:12px;letter-spacing:2px}
+.yurif-entrance h1{font-size:clamp(32px,5vw,52px);letter-spacing:-1.5px;margin:0 0 4px}
+.yurif-subtitle{color:#647F96;margin:0 0 26px}
+.yurif-entrance-grid{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:18px}
+.yurif-choice{border:1px solid #D9EAF6;border-radius:18px;background:#fff;padding:28px;display:flex;flex-direction:column;min-height:290px;box-shadow:0 12px 32px #243F600C}
+.yurif-choice-admin{color:white;background:#243F60;border-color:#243F60}
+.yurif-choice .yurif-symbol{font-size:30px;display:grid;place-items:center;width:54px;height:54px;border-radius:14px;background:#E8F2F9}
+.yurif-choice-admin .yurif-symbol{background:#365B7B}
+.yurif-choice h2{font-size:22px;margin:16px 0 8px}
+.yurif-choice p{font-size:13px;line-height:1.7;color:#66829B;margin:0 0 22px;flex:1}
+.yurif-choice-admin p{color:#D9EAF6}
+.yurif-choice button,.yurif-dialog form button,.yurif-publish-btn{border:0;background:#D9EAF6;color:#243F60;border-radius:9px;font-size:14px;font-weight:750;padding:14px 15px;cursor:pointer}
+.yurif-choice-admin button{background:#fff}
+.yurif-gate-foot{margin:20px 0;color:#647F96;font-size:12px}
+.yurif-dialog{background:#fff;border:1px solid #D9EAF6;border-radius:18px;padding:30px;width:min(490px,100%);box-shadow:0 12px 36px #243F6011}
+.yurif-dialog h1{font-size:26px;margin:10px 0}
+.yurif-dialog>p,.yurif-dialog>small{font-size:13px;color:#647F96;line-height:1.8}
+.yurif-dialog form{display:grid;gap:9px;margin:20px 0}
+.yurif-dialog label{font-size:13px;font-weight:700}
+.yurif-dialog input{font-size:15px;border-radius:9px;padding:12px;border:1px solid #C5DBEA;margin-bottom:8px;width:100%}
+.yurif-dialog form button{background:#243F60;color:white;margin-top:5px}
+.yurif-back,.yurif-smallbtn{border:1px solid #CADDEB;border-radius:9px;padding:8px 12px;background:#F8FBFE;color:#3A6687;cursor:pointer;font-size:12px}
+#auth-message{color:#9C4545!important;min-height:21px;font-size:12px}
+.yurif-public-area{width:min(920px,100%);padding:28px}
+.yurif-public-head{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap}
+.yurif-public-card{padding:20px 22px;background:#F8FBFE;border:1px solid #D9EAF6;border-radius:13px;margin-top:14px}
+.yurif-public-card h3{font-size:17px;margin:0 0 9px}
+.yurif-public-card p{white-space:normal;overflow-wrap:anywhere;font-size:14px;line-height:1.8;margin:0;color:#415F79}
+.yurif-empty{padding:28px;background:#F8FBFE;border-radius:12px;color:#667E94}
+#workspace .header-actions{flex-wrap:wrap;gap:7px}
+.yurif-admin-shade{position:fixed;inset:0;z-index:9999;background:#101E348C;display:flex;align-items:center;justify-content:center;padding:12px}
+.yurif-admin-panel{width:min(850px,100%);max-height:94vh;overflow:auto;background:white;padding:25px;border-radius:17px;box-shadow:0 25px 70px #101E3440}
+.yurif-admin-head{display:flex;align-items:start;justify-content:space-between;gap:12px}
+.yurif-admin-head h2{font-size:23px;margin:0}
+.yurif-admin-panel>p{font-size:13px;color:#647F96;margin:12px 0 20px}
+.yurif-public-editor{background:#F8FBFE;border:1px solid #D9EAF6;border-radius:10px;padding:14px;margin:9px 0;display:grid;gap:9px}
+.yurif-public-editor label{font-size:14px;font-weight:750}
+.yurif-public-editor input:not([type=checkbox]),.yurif-public-editor textarea{width:100%;border:1px solid #C5DBEA;border-radius:8px;padding:10px;font-size:13px;background:white;font-family:inherit}
+.yurif-public-editor textarea{min-height:75px;resize:vertical}
+.yurif-publish-btn{background:#243F60;color:white;width:100%;margin-top:15px}
+@media(max-width:650px){.yurif-entrance-grid{grid-template-columns:1fr}.yurif-choice{min-height:240px;padding:24px}.yurif-dialog{padding:22px}.yurif-admin-panel{padding:17px}}
