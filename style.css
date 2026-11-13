@@ -262,3 +262,17 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .segment-compare-fill.max{background:#243F60}
 .segment-compare-note{font-size:11px;margin:12px 0 0}
 @media(max-width:550px){.segment-compare{padding:10px}.segment-compare-row{grid-template-columns:58px minmax(0,1fr);gap:6px}.segment-compare-barline{grid-template-columns:39px minmax(0,1fr) 42px;gap:4px}}
+
+
+/* Live Arduino serial graph with segment markers */
+.gsr-chart-box{margin:18px 0 16px;background:#F8FBFE;border:1px solid #D9EAF6;border-radius:12px;padding:16px;min-width:0}
+.gsr-chart-header{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:12px}
+.gsr-chart-header h3{font-size:16px;color:#243F60;margin:0 0 3px}
+.gsr-chart-header p{font-size:11px;margin:0}
+#gsr-live-chart{width:100%;height:auto;display:block;border:1px solid #DFEAF3;border-radius:8px;background:#FAFCFE}
+.gsr-chart-legend{display:flex;flex-wrap:wrap;gap:18px;margin:10px 0 5px;font-size:11px;color:#657D91}
+.gsr-chart-legend span{display:flex;align-items:center;gap:6px}
+.gsr-chart-legend i{display:inline-block;width:24px;height:3px;border-radius:2px;background:#246B9A}
+.gsr-chart-legend i.gsr-boundary-legend{height:15px;width:2px;border-radius:0;background:repeating-linear-gradient(to bottom,#D18556 0 4px,transparent 4px 7px)}
+.gsr-chart-box>.muted{font-size:11px;margin:8px 0 0}
+@media(max-width:650px){.gsr-chart-box{padding:11px}.gsr-chart-header h3{font-size:14px}}
