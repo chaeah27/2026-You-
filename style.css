@@ -66,3 +66,13 @@ nav button.active{box-shadow:inset 3px 0 #79B6DB}
 .bar{background:#79B6DB}
 a{color:#285B84}
 input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6DB}
+
+
+/* Experimenter and sensory-session dashboard */
+.experimenter-chip{display:inline-flex;align-items:center;gap:7px;background:var(--blue);color:var(--ink);border:1px solid var(--line);padding:6px 10px;border-radius:20px;font-size:12px}
+.experimenter-chip button{border:none;background:transparent;color:#9b3648;font-size:16px;line-height:1;cursor:pointer;padding:0 2px}
+.session-metrics{display:grid;grid-template-columns:repeat(5,minmax(0,1fr));gap:10px;margin:15px 0 22px}
+.session-metrics .stat{padding:14px 12px}
+.session-metrics .stat .num{font-size:22px}
+@media(max-width:1100px){.session-metrics{grid-template-columns:repeat(3,minmax(0,1fr))}}
+@media(max-width:640px){.session-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
