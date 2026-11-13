@@ -203,3 +203,12 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .lab-import-extra summary{cursor:pointer;color:#243F60;font-weight:700;margin-bottom:8px}
 .lab-import-extra .field{margin-top:10px}
 @media(max-width:650px){.lab-import-metrics{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+
+/* Personal pilot experiment viewer, separately archived from official sessions */
+.pilot-session-panel{margin-top:18px}
+.pilot-session-panel .notice{margin:12px 0 18px}
+.pilot-session-panel .formgrid{margin-bottom:14px}
+.pilot-session-observation{margin-top:14px;background:#fff;border:1px solid #D9EAF6;border-radius:10px;padding:13px;font-size:12px;color:#38516a}
+.pilot-session-observation strong{display:block;color:#243F60;margin-bottom:8px}
+.pilot-session-observation p{white-space:pre-wrap;overflow-wrap:anywhere;margin:5px 0}
