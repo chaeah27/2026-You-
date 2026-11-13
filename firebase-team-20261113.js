@@ -90,7 +90,11 @@ onAuthStateChanged(auth,async user=>{
    const unsub=onSnapshot(collection(store,'teamData',type,'items'),snapshot=>{
     if(state.pending.has(type))return;
     const data=snapshot.docs.map(d=>d.data().value).filter(x=>x&&typeof x==='object');
-    state.cache[type]=new Map(data.map(x=>[String(x.id),JSON.stringify(stripForCloud(x))]));
+    const nextCache=new Map(data.map(x=>[String(x.id),JSON.stringify(stripForCloud(x))]));
+    const previous=state.cache[type]||new Map();
+    const changed=nextCache.size!==previous.size||[...nextCache].some(([id,value])=>previous.get(id)!==value);
+    if(!changed)return;
+    state.cache[type]=nextCache;
     if(window.yurifCloudApply)window.yurifCloudApply(type,data);
    },e=>{$('cloud-status').textContent='동기화 오류: '+friendly(e)});
    state.unsubs.push(unsub);
