@@ -98,3 +98,29 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .session-result-detail span{font-size:12px;overflow-wrap:anywhere;white-space:pre-wrap}
 @media(max-width:1100px){.session-compare-grid{grid-template-columns:1fr}}
 @media(max-width:640px){.session-compare-panel{padding:14px}.session-compare-panel .actions{grid-template-columns:1fr}}
+
+
+/* Experiment laboratory — reusable segment editor and pilot archive */
+.lab-tabs{display:flex;flex-wrap:wrap;gap:8px;margin:18px 0}
+.lab-tabs button{border:1px solid #D9EAF6;background:#fff;color:#243F60;border-radius:9px;padding:10px 14px;font-weight:600}
+.lab-tabs button.active{background:#243F60;color:#fff}
+.lab-editor-row,.lab-segment{display:flex;align-items:center;gap:13px;border:1px solid var(--line);border-radius:11px;padding:12px;margin:9px 0;min-width:0}
+.lab-editor-inputs{flex:1;display:grid;grid-template-columns:1fr 1fr 110px;gap:8px;min-width:0}
+.lab-editor-inputs input,.lab-editor-inputs select{min-width:0}
+.lab-segment-badge{display:grid;place-items:center;width:38px;height:38px;border-radius:9px;background:#D9EAF6;color:#243F60;font-weight:800;flex-shrink:0}
+.lab-time-label{font-size:11px;color:var(--muted);display:flex;align-items:center;gap:5px}
+.lab-time-label input{width:75px}
+.lab-remove{border:0;background:transparent;color:#AA3540;font-size:23px}
+.lab-timer{text-align:center;background:#F4F8FC;color:#243F60;font-size:42px;font-weight:800;letter-spacing:2px;padding:15px;border-radius:14px}
+.lab-segment-list{margin:20px 0}
+.lab-segment>div:nth-child(2){display:grid;gap:2px;flex:1;min-width:0}
+.lab-segment small{color:var(--muted);font-size:11px;overflow-wrap:anywhere}
+.lab-segment-active{border-color:#79B6DB;background:#F4F8FC}
+.lab-segment-state{font-size:11px;color:#477095;white-space:nowrap}
+.lab-archive-item{border-bottom:1px solid var(--line);padding:14px 2px}
+.lab-archive-item:last-child{border:0}
+.lab-archive-item small{font-size:11px;color:var(--muted)}
+.lab-archive-detail{display:flex;gap:7px;flex-wrap:wrap;margin-top:8px}
+.lab-archive-detail span{background:#F4F8FC;border:1px solid var(--line);border-radius:6px;padding:5px 8px;font-size:11px}
+@media(max-width:850px){.lab-editor-inputs{grid-template-columns:1fr}}
+@media(max-width:640px){.lab-editor-row{align-items:flex-start}.lab-timer{font-size:32px}.lab-segment{gap:8px}.lab-segment-state{font-size:10px}}
