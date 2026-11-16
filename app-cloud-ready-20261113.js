@@ -442,13 +442,13 @@ function labCapturePlan(){
 function labArchive(mode){
  const arr=mode==='pilot'?(db.pilotRuns||[]):(db.labRuns||[]).filter(x=>x.mode===mode);
  return '<section class="panel"><h2>'+(mode==='pilot'?'예비실험 아카이브':'정식 실험 진행 이력')+'</h2><p class="muted">'+(mode==='pilot'?'실험 세션과 분리 보관되는 개인 테스트 기록입니다.':'1차·2차 실험의 구간 시각 기록이며, 실험 세션 수치와는 아직 자동 합쳐지지 않습니다.')+'</p>'+
- (arr.length?arr.slice().reverse().map(x=>'<div class="lab-archive-item"><div class="entry-head"><div><strong>'+esc(x.code||'개인')+'</strong><small> · '+esc(x.date)+' · '+esc(labModeName(x.mode))+'</small></div><button type="button" data-lab-delete="'+esc(x.id)+'" data-lab-type="'+esc(mode)+'">삭제</button></div><div class="lab-archive-detail">'+x.steps.map(s=>'<span>'+esc(s.label)+' '+esc(s.name)+' · '+labDuration(s.startedAt,s.endedAt)+(s.note?' · 메모: '+esc(s.note):'')+'</span>').join('')+'</div>'+(typeof gsrArchiveActions==='function'?gsrArchiveActions(x):'')+(mode==='pilot'?'<button type="button" class="btn secondary" data-pilot-session-link="'+esc(x.id)+'">세션 화면에서 예비실험 결과 보기</button>':'<button type="button" class="btn secondary" data-lab-import-link="'+esc(x.id)+'">이 실험을 세션 기록으로 가져오기</button>')+'</div>').join(''):'<div class="empty">저장된 기록이 없습니다.</div>')+'</section>';
+ (arr.length?arr.slice().reverse().map(x=>'<div class="lab-archive-item"><div class="entry-head"><div><strong>'+esc(x.code||'개인')+'</strong><small> · '+esc(x.date)+' · '+esc(labModeName(x.mode))+'</small></div><button type="button" data-lab-delete="'+esc(x.id)+'" data-lab-type="'+esc(mode)+'">삭제</button></div><div class="lab-archive-detail">'+x.steps.map(s=>'<span>'+esc(s.label)+' '+esc(s.name)+' · '+labDuration(s.startedAt,s.endedAt)+(s.note?' · 메모: '+esc(s.note):'')+'</span>').join('')+'</div>'+(typeof gsrArchiveActions==='function'?gsrArchiveActions(x):'')+(Array.isArray(x.gsrSamples)&&x.gsrSamples.length?'<button type="button" class="btn secondary" data-gsr-share="'+esc(x.id)+'">팀원과 GSR 원시값 공유</button>':'')+(mode==='pilot'?'<button type="button" class="btn secondary" data-pilot-session-link="'+esc(x.id)+'">세션 화면에서 예비실험 결과 보기</button>':'<button type="button" class="btn secondary" data-lab-import-link="'+esc(x.id)+'">이 실험을 세션 기록으로 가져오기</button>')+'</div>').join(''):'<div class="empty">저장된 기록이 없습니다.</div>')+'</section>';
 }
 function lab(){
  const tabs='<div class="lab-tabs"><button type="button" data-lab-tab="pilot" class="'+(labArchiveTab==='pilot'?'active':'')+'">개인 예비실험</button><button type="button" data-lab-tab="stage1" class="'+(labArchiveTab==='stage1'?'active':'')+'">1차 실험</button><button type="button" data-lab-tab="stage2" class="'+(labArchiveTab==='stage2'?'active':'')+'">2차 실험</button></div>';
  return head('실험실','실험 환경의 순서를 미리 지정하고 버튼으로 구간 경계를 기록합니다. 개인 예비실험은 정식 결과와 완전히 분리해 보관합니다.','LAB / EXPERIMENT')+
  '<div class="notice">Arduino GSR 센서의 원시 ADC를 USB로 수집합니다. 피부전도도(µS) 환산은 보정 전까지 지원하지 않습니다. Apple Watch 실시간 연결도 아직 지원하지 않습니다. 측정 중 브라우저 탭과 컴퓨터를 켜 두세요.</div>'+
- (typeof gsrLabPanel==='function'?gsrLabPanel():'')+(labDraft?labDraftView():labEditor())+tabs+labArchive(labArchiveTab);
+ (typeof gsrLabPanel==='function'?gsrLabPanel():'')+labSaveCheckPanel()+(labDraft?labDraftView():labEditor())+(window.yurifGsrSharedPanel?.()||'')+tabs+labArchive(labArchiveTab);
 }
 let labArchiveTab='pilot';
 function labTick(){
@@ -467,18 +467,66 @@ function labNext(){
  if(i<0||i>=labDraft.steps.length-1)return;
  const t=Date.now();labDraft.steps[i].endedAt=t;labDraft.steps[i+1].startedAt=t;labSaveDraft();render();
 }
+const LAB_SAVE_CHECK_KEY='yurif_last_save_check_v2';
+let lastLabSaveCheck=null;
+try{lastLabSaveCheck=JSON.parse(localStorage.getItem(LAB_SAVE_CHECK_KEY)||'null')}catch{}
+function recordLabSaveCheck(next){
+ lastLabSaveCheck=next;
+ try{localStorage.setItem(LAB_SAVE_CHECK_KEY,JSON.stringify(next))}catch{}
+ const panel=document.getElementById('lab-save-check');
+ if(panel)panel.outerHTML=labSaveCheckPanel();
+}
+function labSaveCheckPanel(){
+ const s=lastLabSaveCheck;if(!s)return '';
+ const cloud=s.cloud==='verified'?'✅ Firebase 원시값 '+Number(s.cloudCount||0)+'개 재확인 완료':
+  s.cloud==='pending'?'⏳ Firebase 원시값 업로드 중':
+  s.cloud==='failed'?'⚠️ Firebase 원시값 업로드 실패 · 현재 컴퓨터 원본 유지':
+  '⚠️ Firebase 원시값 저장 여부 확인되지 않음';
+ return '<section class="panel" id="lab-save-check" role="status"><h2>최근 실험 저장 확인</h2>'+
+ '<p><strong>'+esc(s.code||'실험')+'</strong> · '+esc(s.date||'')+' · ADC '+Number(s.samples||0)+'개</p>'+
+ '<p>'+(s.localOk?'✅ 로컬 기록을 저장 후 다시 읽어 검증함':'⚠️ 로컬 기록 검증 실패')+'</p>'+
+ '<p>'+cloud+'</p>'+
+ '<p class="muted">저장 상태는 원본 측정값의 유무와 서버 확인 결과를 구분하여 표시합니다. 중요한 실험은 원시 CSV와 JSON을 추가로 백업하세요.</p></section>';
+}
+window.yurifGetActiveGsrRun=()=>labDraft;
+window.yurifFindGsrRun=id=>[...(db.pilotRuns||[]),...(db.labRuns||[])].find(x=>x.id===id);
+
 function labFinish(){
  if(!labDraft||!labDraft.startedAt)return;
  if(!confirm('현재 구간을 종료하고 실험 기록을 저장할까요?'))return;
  const t=Date.now();labDraft.endedAt=t;
  const i=labDraft.steps.findIndex(x=>x.startedAt&&!x.endedAt);
  if(i>=0)labDraft.steps[i].endedAt=t;
- if(labDraft.mode==='pilot')db.pilotRuns.push(labDraft);
- else db.labRuns.push(labDraft);
- if(!save()){if(labDraft.mode==='pilot')db.pilotRuns.pop();else db.labRuns.pop();labSaveDraft();return}
+ const finished=labDraft;
+ const samples=Array.isArray(finished.gsrSamples)?finished.gsrSamples:[];
+ // Do not clear the unsaved draft unless the local archive survives a readback.
+ try{localStorage.setItem('yurif_experiment_recovery_'+finished.id,JSON.stringify(finished))}
+ catch(err){alert('독립 복구 사본 저장에 실패했습니다. 실험 초안은 유지됩니다. 저장 공간을 확인해 주세요.');labSaveDraft();return}
+ const key=finished.mode==='pilot'?'pilotRuns':'labRuns';
+ if(!db[key].some(x=>x.id===finished.id))db[key].push(finished);
+ if(!save()){db[key]=db[key].filter(x=>x.id!==finished.id);labSaveDraft();return}
+ let disk;
+ try{const stored=JSON.parse(localStorage.getItem(KEY)||'null');disk=(stored?.[key]||[]).find(x=>x.id===finished.id)}catch{}
+ const diskPoints=Array.isArray(disk?.gsrSamples)?disk.gsrSamples:[];
+ const localOk=!!disk&&disk.startedAt===finished.startedAt&&disk.endedAt===finished.endedAt&&
+  JSON.stringify(disk.steps)===JSON.stringify(finished.steps)&&JSON.stringify(diskPoints)===JSON.stringify(samples);
+ recordLabSaveCheck({id:finished.id,code:finished.code,date:finished.date,samples:samples.length,localOk,
+  cloud:samples.length?'pending':'unknown',cloudCount:0});
+ if(!localOk){alert('로컬 저장 검증 실패. 진행 중인 실험 초안을 보존했으므로 데이터 백업 및 저장 공간을 확인해 주세요.');render();return}
  labDraft=null;localStorage.removeItem(LAB_DRAFT_KEY);render();
+ if(!samples.length){alert('로컬 실험 기록은 확인했으나 GSR 원시 측정값이 없습니다. 센서 연결을 확인해 주세요.');return}
+ if(!window.yurifGsrSharing?.upload){
+  recordLabSaveCheck({...lastLabSaveCheck,cloud:'failed'});
+  alert('로컬 저장 확인 완료 ('+samples.length+'개). Firebase 원시값 공유 기능에 연결하지 못했습니다. 원시 CSV를 별도로 보존해 주세요.');
+  return;
+ }
+ window.yurifGsrSharing.upload(finished).then(result=>{
+  if(lastLabSaveCheck?.id===finished.id)recordLabSaveCheck({...lastLabSaveCheck,cloud:'verified',cloudCount:result.count});
+ }).catch(err=>{
+  if(lastLabSaveCheck?.id===finished.id)recordLabSaveCheck({...lastLabSaveCheck,cloud:'failed'});
+  alert('로컬 저장은 확인되었지만 Firebase 원시값 업로드는 실패했습니다: '+String(err?.message||err)+'\n원본은 현재 브라우저에 남아 있습니다. 실험실 아카이브의 팀 공유 버튼으로 다시 시도할 수 있습니다.');
+ });
 }
-
 function render(){if(window.yurifCloud?.ready){const label=document.getElementById('cloud-status');if(label)label.textContent=window.yurifCloud.status||'팀 공유 연결됨'}document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let names={home:'연구 대시보드',protocol:'실험 설계·프로토콜',equipment:'장비·보정 관리',journal:'연구 일지',sessions:'실험 세션 기록',analysis:'분석·결과 정리',references:'참고문헌·링크',lab:'실험실',export:'데이터 백업'};document.getElementById('viewlabel').textContent=names[view];document.getElementById('content').innerHTML=({home,protocol,equipment,journal,sessions,analysis,references,lab,export:backup}[view])();if(view==='sessions'){renderExperimenterResults();renderSessionViews()}if(view==='lab'&&!labDraft)labRenderStepEditor();if(view==='lab'&&typeof gsrRefresh==='function')gsrRefresh();window.scrollTo({top:0,behavior:'instant'});}
 function route(v){view=v;render()}window.route=route;window.exportJSON=exportJSON;
 window.yurifCloudApply=(type,records)=>{if(!Array.isArray(records)||!Object.hasOwn(defaults,type))return;if(type==='pilotRuns')return;const prior=new Map((db[type]||[]).filter(x=>x?.id!=null).map(x=>[String(x.id),x]));db[type]=records.map(record=>{const own=prior.get(String(record.id));const merged={...record};if(own&&Array.isArray(own.gsrSamples)&&!Array.isArray(merged.gsrSamples))merged.gsrSamples=own.gsrSamples;if(own&&Array.isArray(own.gsrRawSamples)&&!Array.isArray(merged.gsrRawSamples))merged.gsrRawSamples=own.gsrRawSamples;return merged});try{localStorage.setItem(KEY,JSON.stringify(db))}catch{}if(document.getElementById('content'))render()};
