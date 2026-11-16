@@ -1,0 +1,96 @@
+rules_version = '2';
+service cloud.firestore {
+ match /databases/{database}/documents {
+  function isMember(){
+   return request.auth != null
+    && exists(/databases/$(database)/documents/members/$(request.auth.uid))
+    && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.active == true
+    && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role in ['admin','researcher'];
+  }
+  function isAdmin(){
+   return isMember()
+    && get(/databases/$(database)/documents/members/$(request.auth.uid)).data.role == 'admin';
+  }
+  function hasAccessKey(token){
+   return request.auth != null
+    && exists(/databases/$(database)/documents/participantAccess/$(token))
+    && get(/databases/$(database)/documents/participantAccess/$(token)).data.active == true;
+  }
+  function ownsConsent(token){
+   return hasAccessKey(token)
+    && exists(/databases/$(database)/documents/participantConsents/$(token))
+    && get(/databases/$(database)/documents/participantConsents/$(token)).data.uid == request.auth.uid;
+  }
+  function agreed(token){
+   return ownsConsent(token)
+    && get(/databases/$(database)/documents/participantConsents/$(token)).data.agreed == true;
+  }
+  match /members/{userId}{
+   allow get: if request.auth != null && (request.auth.uid == userId || isAdmin());
+   allow list, create, update, delete: if isAdmin();
+  }
+  match /teamData/{document=**}{
+   allow read, write: if isMember();
+  }
+  match /publicContent/{document=**}{
+   allow read: if true;
+   allow write: if isAdmin();
+  }
+  // Plans have 128-bit random access keys. Participants may get the EXACT
+  // document only when they know the key; listing all plans is forbidden.
+  match /participantAccess/{token}{
+   allow get: if request.auth != null;
+   allow list: if isMember();
+   allow create: if isMember();
+   allow update: if isAdmin();
+   allow delete: if false;
+  }
+  match /participantConsents/{token}{
+   // Allow a read of a missing consent before the initial answer.
+   allow get: if isMember() || (
+    hasAccessKey(token)
+    && (!exists(/databases/$(database)/documents/participantConsents/$(token))
+        || resource.data.uid == request.auth.uid)
+   );
+   allow list: if isMember();
+   allow create: if hasAccessKey(token)
+    && !isMember()
+    && request.resource.data.keys().hasOnly(['uid','agreed','createdAt'])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.agreed is bool
+    && request.resource.data.createdAt == request.time;
+   allow update, delete: if false;
+  }
+  match /participantAnswers/{token}/items/{slot}{
+   allow get: if isMember() || ownsConsent(token);
+   allow list: if isMember() || ownsConsent(token);
+   allow create: if agreed(token)
+    && !isMember()
+    && request.resource.data.keys().hasOnly(['uid','slot','environment','index','stage','valence','arousal','liking','note','createdAt'])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.slot == slot
+    && request.resource.data.stage == get(/databases/$(database)/documents/participantAccess/$(token)).data.stage
+    && request.resource.data.environment is string
+    && request.resource.data.environment.size() <= 120
+    && request.resource.data.note is string
+    && request.resource.data.note.size() <= 1000
+    && request.resource.data.index is int
+    && request.resource.data.valence is int
+    && request.resource.data.valence >= 1 && request.resource.data.valence <= 9
+    && request.resource.data.arousal is int
+    && request.resource.data.arousal >= 1 && request.resource.data.arousal <= 9
+    && (request.resource.data.liking == '' || (request.resource.data.liking is int
+      && request.resource.data.liking >= 1 && request.resource.data.liking <= 9))
+    && request.resource.data.createdAt == request.time
+    && (
+     (request.resource.data.stage == 'stage2' && slot == 'final' && request.resource.data.index == 0)
+     ||
+     (request.resource.data.stage == 'stage1' && slot.matches('s[0-9]+')
+      && request.resource.data.index >= 0
+      && request.resource.data.index < get(/databases/$(database)/documents/participantAccess/$(token)).data.order.size())
+    );
+   allow update, delete: if false;
+  }
+  match /{document=**}{allow read, write: if false;}
+ }
+}
