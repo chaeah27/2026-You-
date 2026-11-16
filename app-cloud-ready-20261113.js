@@ -509,8 +509,8 @@ async function recoverPilotCsv(){
  for(const line of lines){
   const row=line.split(',');
   const ms=Number(row[idx.timestamp_ms]),adc=Number(row[idx.adc_raw]);
-  const label=String(row[idx.segment]||'').trim().toUpperCase();
-  const env=String(row[idx.environment]||'').trim();
+  const label=String(row[idx.segment]||'').trim().replace(/^["']|["']$/g,'').trim().toUpperCase();
+  const env=String(row[idx.environment]||'').trim().replace(/^["']|["']$/g,'').trim();
   if(!Number.isFinite(ms)||!Number.isInteger(adc)||adc<0||adc>1023||!(/^[A-Z]$/.test(label)))continue;
   samples.push([ms,adc]);
   if(!segments.has(label))segments.set(label,{label,name:env||'구간 '+label,envId:'',envName:env,target:0,startedAt:ms,endedAt:ms+1,note:''});
