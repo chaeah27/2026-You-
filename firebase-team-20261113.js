@@ -400,7 +400,7 @@ $('go-participant').addEventListener('click',enterParticipantPortal);
 $('participant-exit').addEventListener('click',async()=>{
  participantState.key='';participantState.plan=null;participantState.consent=null;participantState.answers=new Map();
  $('participant-steps').innerHTML='';$('participant-access-code').value='';$('participant-entry-form').hidden=false;portalMsg('');
- if(auth.currentUser?.isAnonymous)await signOut(auth);
+ // Preserve anonymous session so an accidental exit does not lock the participant out of the one-time consent record.
  show('entry-screen');
 });
 $('participant-entry-form').addEventListener('submit',async e=>{
