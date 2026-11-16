@@ -323,3 +323,18 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 .yurif-public-editor textarea{min-height:75px;resize:vertical}
 .yurif-publish-btn{background:#243F60;color:white;width:100%;margin-top:15px}
 @media(max-width:650px){.yurif-entrance-grid{grid-template-columns:1fr}.yurif-choice{min-height:240px;padding:24px}.yurif-dialog{padding:22px}.yurif-admin-panel{padding:17px}}
+
+/* Participant informed-consent + survey workspace */
+.yurif-participant-area{width:min(760px,96vw);max-width:760px}
+.yurif-participant-area #participant-steps{margin-top:18px}
+.yurif-participant-area .panel{text-align:left;margin-top:14px}
+.yurif-participant-area .participant-consent-copy{white-space:normal;line-height:1.75;padding:16px;background:#f6f8fb;border-radius:12px;margin-top:12px;max-height:40vh;overflow-y:auto}
+.yurif-participant-area .participant-confirm{display:flex;align-items:flex-start;gap:9px;margin:18px 0;line-height:1.6}
+.yurif-participant-area .participant-confirm input{width:auto;margin-top:5px}
+.yurif-participant-area details>summary{cursor:pointer;font-weight:700;background:#eef4fa;padding:13px;border-radius:10px}
+.yurif-participant-area .field{margin:14px 0}
+.yurif-participant-area input,.yurif-participant-area textarea{max-width:100%}
+#participant-admin-list .lab-archive-item{padding:16px}
+#participant-admin-list code{overflow-wrap:anywhere;user-select:all}
+#participant-admin-results .tablewrap,#participant-session-results .tablewrap{overflow:auto}
+#participant-plan-form .field{margin-bottom:12px}
