@@ -1,5 +1,5 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
-import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signInAnonymously,signOut} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
 import {getFirestore,collection,doc,getDoc,getDocs,onSnapshot,writeBatch,setDoc,serverTimestamp,query,where} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -60,6 +60,7 @@ function cleanup(){
  $('workspace').hidden=true;$('admin-drawer').hidden=true;
 }
 onAuthStateChanged(auth,async user=>{
+ if(user?.isAnonymous){show('participant-screen');return}
  if(!user){if(state.ready)cleanup();return}
  if(state.started)return;
  state.started=true;error('관리자·연구원 권한 확인 중…');
@@ -371,4 +372,241 @@ document.addEventListener('click',async e=>{
  try{const result=await uploadGsrRun(run);alert('서버 저장 확인 완료: GSR 원시값 '+result.count+'개. 연구원은 팀 공유 GSR 원시자료 메뉴에서 볼 수 있습니다.');}
  catch(err){alert('서버 업로드 실패: '+friendly(err)+'\n원본은 이 컴퓨터에 남아 있습니다. 다시 시도해 주세요.')}
  finally{b.disabled=false;b.textContent='팀원과 GSR 원시값 공유'}
+});
+
+/* Participant portal. Anonymous Firebase auth is REQUIRED.
+   An entry key is a cryptographically random 128-bit bearer capability,
+   not the human-readable P01 code. Never expose records to public visitors. */
+const participantState={key:'',plan:null,consent:null,answers:new Map(),adminPlans:[],adminSelected:'',adminRows:[],adminBusy:false};
+const participantPlanRef=key=>doc(store,'participantAccess',key);
+const participantConsentRef=key=>doc(store,'participantConsents',key);
+const participantAnswerRef=(key,slot)=>doc(store,'participantAnswers',key,'items',slot);
+const participantAnswersRef=key=>collection(store,'participantAnswers',key,'items');
+const portalMsg=value=>{const el=$('participant-message');if(el)el.textContent=value||''};
+const shortText=value=>safe(String(value||''));
+const participantSurveySlots=plan=>plan?.stage==='stage1'
+ ?(plan.order||[]).map((name,i)=>({slot:'s'+i,title:'감각 환경 '+(i+1)+' / '+name,env:name,index:i}))
+ :[{slot:'final',title:'2차 실험 · 대화 종료 후 설문',env:'대화 종료 후',index:0}];
+
+async function enterParticipantPortal(){
+ show('participant-screen');portalMsg('');
+ if(auth.currentUser&&!auth.currentUser.isAnonymous){portalMsg('이 브라우저에서는 연구원으로 로그인되어 있습니다. 연구원 로그아웃 후 참가자 모드에 입장해 주세요.');return}
+ try{
+  if(!auth.currentUser)await signInAnonymously(auth);
+  portalMsg('입장 코드를 입력해 주세요.');
+ }catch(e){portalMsg('참가자 인증 실패. Firebase Authentication에서 익명 인증을 활성화해야 합니다. '+friendly(e))}
+}
+$('go-participant').addEventListener('click',enterParticipantPortal);
+$('participant-exit').addEventListener('click',async()=>{
+ participantState.key='';participantState.plan=null;participantState.consent=null;participantState.answers=new Map();
+ $('participant-steps').innerHTML='';$('participant-access-code').value='';$('participant-entry-form').hidden=false;portalMsg('');
+ if(auth.currentUser?.isAnonymous)await signOut(auth);
+ show('entry-screen');
+});
+$('participant-entry-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ if(!auth.currentUser?.isAnonymous)return portalMsg('참가자 인증이 필요합니다. 연구원 계정과 별도의 브라우저에서 접속해 주세요.');
+ const key=$('participant-access-code').value.trim().toLowerCase().replaceAll('-','');
+ if(!/^[0-9a-f]{32}$/.test(key))return portalMsg('연구원에게 받은 32자리 입장 코드를 정확히 입력해 주세요.');
+ const btn=$('participant-enter-btn');btn.disabled=true;portalMsg('참가 정보를 확인하는 중…');
+ try{
+  const snap=await getDoc(participantPlanRef(key));
+  if(!snap.exists()||snap.data().active!==true)throw Error('활성화된 참가 코드가 아닙니다.');
+  participantState.key=key;participantState.plan=snap.data();
+  const consentSnap=await getDoc(participantConsentRef(key));
+  participantState.consent=consentSnap.exists()?consentSnap.data():null;
+  if(participantState.consent&&participantState.consent.uid!==auth.currentUser.uid)
+   throw Error('이미 다른 참가자 세션에서 사용된 입장 코드입니다. 연구원에게 문의해 주세요.');
+  participantState.answers=new Map();
+  if(participantState.consent?.agreed){
+   const response=await getDocs(participantAnswersRef(key));
+   for(const item of response.docs)participantState.answers.set(item.id,item.data());
+  }
+  $('participant-entry-form').hidden=true;portalMsg('참가 코드 확인 완료');
+  renderParticipantSteps();
+ }catch(ex){portalMsg('입장할 수 없습니다: '+friendly(ex))}
+ finally{btn.disabled=false}
+});
+function renderParticipantSteps(){
+ const root=$('participant-steps'),plan=participantState.plan,consent=participantState.consent;
+ if(!root||!plan)return;
+ if(!consent){
+  root.innerHTML='<section class="panel"><h2>사전 안내서 확인하기</h2>'+
+   '<details id="participant-info"><summary>사전 안내서 열기</summary><div class="participant-consent-copy">'+shortText(plan.consentText).replace(/\n/g,'<br>')+'</div></details>'+
+   '<label class="participant-confirm"><input type="checkbox" id="participant-read-check"> 안내서를 읽고 연구 목적·절차·중단 권리를 확인했습니다.</label>'+
+   '<div class="actions"><button type="button" class="btn" id="participant-agree">동의</button>'+
+   '<button type="button" class="btn secondary" id="participant-decline">비동의</button></div>'+
+   '<p class="muted">동의하지 않으면 설문이 시작되지 않습니다. 참여는 자발적이며, 중단을 원하면 연구원에게 알려 주세요.</p></section>';
+  return;
+ }
+ if(!consent.agreed){
+  root.innerHTML='<section class="panel"><h2>동의하지 않음</h2><p>동의하지 않았으므로 실험 설문을 진행하지 않습니다. 참여를 원하지 않는다는 이유로 불이익이 없어야 합니다.</p></section>';return;
+ }
+ const slots=participantSurveySlots(plan),next=slots.find(x=>!participantState.answers.has(x.slot));
+ if(!next){
+  root.innerHTML='<section class="panel"><h2>모든 설문 완료</h2><p>응답이 서버에 저장되었습니다. 연구원의 안내를 따라 주세요.</p>'+
+   '<p class="muted">총 '+slots.length+'개 설문 응답 완료</p></section>';return;
+ }
+ const completed=slots.filter(x=>participantState.answers.has(x.slot)).length;
+ root.innerHTML='<section class="panel"><h2>'+shortText(next.title)+'</h2>'+
+  '<p>진행 상태: '+completed+' / '+slots.length+' 완료</p>'+
+  (plan.stage==='stage1'?'<p>해당 감각 환경 체험을 마친 뒤 아래 설문에 답하고 다음 단계로 넘어가세요.</p>':'<p>전체 대화가 끝난 후에만 아래 설문에 응답해 주세요.</p>')+
+  '<form id="participant-survey-form"><div class="field"><label>'+shortText(plan.valenceQuestion||'현재 느끼는 쾌·불쾌 정도 (1 매우 불쾌 ~ 9 매우 쾌적)')+'</label>'+
+  '<input name="valence" type="number" min="1" max="9" step="1" required></div>'+
+  '<div class="field"><label>'+shortText(plan.arousalQuestion||'현재 각성 수준 (1 매우 낮음 ~ 9 매우 높음)')+'</label>'+
+  '<input name="arousal" type="number" min="1" max="9" step="1" required></div>'+
+  (plan.stage==='stage2'?'<div class="field"><label>'+shortText(plan.likingQuestion||'대화 상대에 대한 호감 정도 (1 매우 낮음 ~ 9 매우 높음)')+'</label><input name="liking" type="number" min="1" max="9" step="1" required></div>':'')+
+  '<div class="field"><label>추가 느낌 · 특이사항 (선택)</label><textarea name="note" maxlength="1000"></textarea></div>'+
+  '<button type="submit" class="btn" id="participant-survey-save">'+(completed===slots.length-1?'최종 설문 저장':'응답 저장하고 다음 단계')+'</button></form></section>';
+}
+async function recordParticipantConsent(agreed){
+ if(!participantState.plan||!participantState.key||!auth.currentUser?.isAnonymous)return;
+ if(agreed&&!$('participant-read-check')?.checked)return portalMsg('안내서 확인란에 먼저 체크해 주세요.');
+ const data={uid:auth.currentUser.uid,agreed,createdAt:serverTimestamp()};
+ try{
+  await setDoc(participantConsentRef(participantState.key),data);
+  const stored=await getDoc(participantConsentRef(participantState.key));
+  if(!stored.exists()||stored.data().agreed!==agreed)throw Error('동의 기록 확인 실패');
+  participantState.consent=stored.data();portalMsg(agreed?'동의 응답 저장 확인 완료':'비동의 응답 저장 확인 완료');
+  renderParticipantSteps();
+ }catch(e){portalMsg('동의 기록 저장 실패: '+friendly(e)+' · 저장 확인 전에는 다음 단계로 진행할 수 없습니다.')}
+}
+async function recordParticipantAnswer(form){
+ if(!participantState.plan||!participantState.consent?.agreed)return;
+ const next=participantSurveySlots(participantState.plan).find(x=>!participantState.answers.has(x.slot));
+ if(!next)return;
+ const values=Object.fromEntries(new FormData(form));
+ const valence=Number(values.valence),arousal=Number(values.arousal),liking=values.liking==null?null:Number(values.liking);
+ if(![valence,arousal].every(v=>Number.isInteger(v)&&v>=1&&v<=9)||(liking!==null&&(!Number.isInteger(liking)||liking<1||liking>9)))return portalMsg('설문 점수는 1~9 사이의 정수로 입력해 주세요.');
+ const button=$('participant-survey-save');button.disabled=true;portalMsg('응답 저장 중…');
+ const answer={uid:auth.currentUser.uid,slot:next.slot,environment:next.env,index:next.index,
+  stage:participantState.plan.stage,valence,arousal,liking:liking===null?'':liking,
+  note:String(values.note||'').slice(0,1000),createdAt:serverTimestamp()};
+ try{
+  await setDoc(participantAnswerRef(participantState.key,next.slot),answer);
+  const check=await getDoc(participantAnswerRef(participantState.key,next.slot));
+  if(!check.exists()||check.data().valence!==valence||check.data().arousal!==arousal)throw Error('응답 저장 확인 실패');
+  participantState.answers.set(next.slot,check.data());portalMsg('응답 '+(participantState.answers.size)+'개 저장 확인 완료');
+  renderParticipantSteps();
+ }catch(e){portalMsg('응답 저장 실패: '+friendly(e)+' · 저장 성공 전에는 다음 설문으로 넘어가지 않습니다.');button.disabled=false}
+}
+document.addEventListener('click',e=>{
+ if(e.target?.id==='participant-agree')recordParticipantConsent(true);
+ if(e.target?.id==='participant-decline')recordParticipantConsent(false);
+});
+document.addEventListener('submit',e=>{
+ if(e.target?.id!=='participant-survey-form')return;
+ e.preventDefault();recordParticipantAnswer(e.target);
+});
+
+function participantAdminHtml(){
+ return '<section class="panel"><h2>실험 참가자 등록 및 설문 순서 설정</h2>'+
+ '<p class="muted">연구용 참가자 코드(P01 등)와 추측하기 어려운 별도의 입장 코드를 발급합니다. 입장 코드를 받은 사람만 본인 설문에 접근할 수 있습니다. 실명은 입력하지 마세요.</p>'+
+ '<form id="participant-plan-form"><div class="formgrid"><div class="field"><label>연구용 참가자 코드</label><input name="code" maxlength="30" required placeholder="P01"></div>'+
+ '<div class="field"><label>실험 단계</label><select name="stage" id="participant-plan-stage"><option value="stage1">1차 감각 환경 실험</option><option value="stage2">2차 대화 실험</option></select></div></div>'+
+ '<div class="field"><label>참가자에게 적용할 감각 환경 순서 (1차 실험 · 한 줄에 하나씩)</label><textarea name="order" rows="5" placeholder="조도 300 lx · 4000 K&#10;조용한 교실&#10;바닐라 향" required></textarea></div>'+
+ '<div class="field"><label>사전 안내서 및 동의 설명문 (직접 작성 · 필수)</label><textarea name="consentText" rows="7" required placeholder="연구 목적, 실험 절차와 시간, 측정 자료 및 설문 저장 방식, 예상되는 불편, 자발적 참여와 중단 권리, 문의 방법, 보존 기간을 정확히 작성하세요."></textarea></div>'+
+ '<div class="field"><label>쾌·불쾌 설문 문항</label><input name="valenceQuestion" maxlength="240" value="현재 느끼는 쾌·불쾌 정도 (1 매우 불쾌 ~ 9 매우 쾌적)"></div>'+
+ '<div class="field"><label>각성 설문 문항</label><input name="arousalQuestion" maxlength="240" value="현재 각성 수준 (1 매우 낮음 ~ 9 매우 높음)"></div>'+
+ '<div class="field"><label>대인 호감 설문 문항 (2차)</label><input name="likingQuestion" maxlength="240" value="대화 상대에 대한 호감 정도 (1 매우 낮음 ~ 9 매우 높음)"></div>'+
+ '<button type="submit" class="btn" id="participant-plan-create">참가자 등록 · 입장 코드 발급</button></form></section>'+
+ '<section class="panel"><div class="entry-head"><div><h2>참가자별 설문 및 생리 측정 결과</h2><p class="muted">설문과 같은 참가자 코드의 GSR 기록을 함께 확인합니다. 구간 매칭은 환경명·시각을 검토해야 합니다.</p></div><button type="button" class="btn secondary" id="participant-admin-refresh">목록 새로고침</button></div>'+
+ '<div id="participant-admin-list">'+(participantState.adminPlans.length?participantState.adminPlans.map(p=>
+  '<div class="lab-archive-item"><strong>'+shortText(p.code)+'</strong> · '+(p.stage==='stage1'?'1차':'2차')+' · '+(p.order||[]).length+'개 조건'+
+  '<p class="muted">입장 코드: <code>'+shortText(p.key)+'</code></p>'+
+  '<div class="actions"><button type="button" class="btn secondary" data-participant-copy="'+shortText(p.key)+'">입장 코드 복사</button>'+
+  '<button type="button" class="btn secondary" data-participant-results="'+shortText(p.key)+'">동의·응답·GSR 조회</button></div></div>').join(''):'<p class="muted">등록된 참가자가 없거나 아직 목록을 불러오지 못했습니다.</p>')+'</div>'+
+ '<div id="participant-admin-results">'+(participantState.adminRows||[]).join('')+'</div></section>';
+}
+window.yurifParticipantAdminHtml=participantAdminHtml;
+async function refreshParticipantAdmin(){
+ if(!state.ready)return;
+ try{
+  const snapshot=await getDocs(collection(store,'participantAccess'));
+  participantState.adminPlans=snapshot.docs.map(d=>({key:d.id,...d.data()})).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
+  if(document.getElementById('content')&&window.yurifParticipantAdminRefreshView)window.yurifParticipantAdminRefreshView();
+ }catch(ex){const node=$('participant-admin-list');if(node)node.textContent='참가자 목록 불러오기 실패: '+friendly(ex)}
+}
+window.yurifParticipantAdminLoad=refreshParticipantAdmin;
+function participantAdminSelectStage(){
+ const el=document.querySelector('#participant-plan-form [name=order]');
+ if(!el)return;
+ el.required=$('participant-plan-stage')?.value==='stage1';
+ el.disabled=$('participant-plan-stage')?.value==='stage2';
+ el.placeholder=el.disabled?'2차 실험은 대화 종료 후 설문 한 번만 표시됩니다.':'환경 순서대로 한 줄에 하나씩 입력하세요.';
+}
+document.addEventListener('change',e=>{if(e.target?.id==='participant-plan-stage')participantAdminSelectStage()});
+document.addEventListener('submit',async e=>{
+ if(e.target?.id!=='participant-plan-form')return;
+ e.preventDefault();
+ if(!state.ready||!state.member)return alert('승인된 연구원 계정으로 로그인해 주세요.');
+ const d=Object.fromEntries(new FormData(e.target)),code=String(d.code||'').trim();
+ const stage=d.stage==='stage2'?'stage2':'stage1';
+ const order=stage==='stage1'?String(d.order||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean):['대화 종료'];
+ const consentText=String(d.consentText||'').trim();
+ if(!code||!order.length||!consentText)return alert('참가자 코드, 환경 순서, 안내서를 확인해 주세요.');
+ if(participantState.adminPlans.some(p=>p.code===code&&p.stage===stage&&p.active))return alert('같은 참가자 코드·실험 단계가 이미 등록되어 있습니다. 기존 등록 정보를 확인해 주세요.');
+ const key=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
+ const plan={code,stage,order,consentText,active:true,valenceQuestion:String(d.valenceQuestion||'').slice(0,240),
+  arousalQuestion:String(d.arousalQuestion||'').slice(0,240),likingQuestion:String(d.likingQuestion||'').slice(0,240),
+  createdAt:serverTimestamp()};
+ const button=$('participant-plan-create');button.disabled=true;
+ try{
+  await setDoc(participantPlanRef(key),plan);
+  const check=await getDoc(participantPlanRef(key));
+  if(!check.exists())throw Error('서버 저장 확인 실패');
+  await refreshParticipantAdmin();
+  alert('참가자 등록 완료. 입장 코드: '+key+'\n연구원 화면의 코드 복사 버튼으로 참가자에게 전달할 수 있습니다.');
+ }catch(ex){alert('참가자 등록 실패: '+friendly(ex))}
+ finally{button.disabled=false}
+});
+async function participantAdminRead(key){
+ const root=$('participant-admin-results');
+ if(!root)return;
+ root.textContent='동의 및 설문 응답을 불러오는 중…';
+ const plan=participantState.adminPlans.find(p=>p.key===key);if(!plan)return;
+ try{
+  const [consentSnapshot,answerSnapshot,gsrSnapshot]=await Promise.all([
+   getDoc(participantConsentRef(key)),getDocs(participantAnswersRef(key)),
+   getDocs(query(gsrIndex,where('code','==',plan.code)))
+  ]);
+  const consent=consentSnapshot.exists()?consentSnapshot.data():null;
+  const answers=new Map(answerSnapshot.docs.map(d=>[d.id,d.data()]));
+  const runs=gsrSnapshot.docs.map(d=>d.data()).filter(r=>r.mode===plan.stage);
+  let physiology=[];
+  for(const run of runs){
+   const chunkSnap=await getDocs(query(gsrChunks,where('runId','==',run.id)));
+   const points=chunkSnap.docs.flatMap(d=>Array.isArray(d.data().points)?d.data().points:[]);
+   for(const step of run.steps||[]){
+    if(!step.startedAt||!step.endedAt)continue;
+    const readings=points.filter(p=>Array.isArray(p)&&p[0]>=step.startedAt&&p[0]<step.endedAt);
+    if(!readings.length)continue;
+    physiology.push({name:step.envName||step.name||step.label,label:step.label,
+      count:readings.length,mean:(readings.reduce((sum,p)=>sum+p[1],0)/readings.length).toFixed(2),
+      min:Math.min(...readings.map(p=>p[1])),max:Math.max(...readings.map(p=>p[1])),run:run.id});
+   }
+  }
+  const slots=participantSurveySlots(plan);
+  root.innerHTML='<section class="panel"><h3>'+shortText(plan.code)+' · 설문·GSR 확인</h3>'+
+   '<p>사전 동의: '+(!consent?'아직 응답 없음':consent.agreed?'동의':'비동의')+
+   ' / 설문 완료: '+answers.size+' / '+slots.length+'</p>'+
+   '<div class="tablewrap"><table><thead><tr><th>구간 · 환경</th><th>설문 저장</th><th>쾌·불쾌</th><th>각성</th><th>대인 호감</th><th>GSR ADC</th></tr></thead><tbody>'+
+   slots.map(slot=>{
+    const answer=answers.get(slot.slot);
+    const matched=physiology.find(p=>p.name===slot.env)||null;
+    return '<tr><td>'+shortText(slot.title)+'</td><td>'+(answer?'완료':'미응답')+'</td><td>'+(answer?answer.valence:'—')+
+     '</td><td>'+(answer?answer.arousal:'—')+'</td><td>'+(answer&&answer.liking!==''?answer.liking:'—')+'</td>'+
+     '<td>'+(matched?'평균 '+matched.mean+' · '+matched.count+'개 (최소 '+matched.min+', 최대 '+matched.max+')':'동일 환경명으로 자동 매칭되지 않음')+'</td></tr>';
+   }).join('')+'</tbody></table></div>'+
+   '<p class="muted">GSR 수치는 보정 전 ADC이며, 같은 참가자 코드와 정확히 일치하는 환경명만 자동 연결합니다. 실험 구간 시각과 설문 응답 시각을 별도로 확인하세요. 맞지 않으면 임의로 합치지 않습니다.</p>'+
+   (physiology.length?'<p class="muted">연결된 GSR 구간: '+physiology.map(p=>shortText(p.label)+' '+shortText(p.name)+'(평균 '+p.mean+')').join(', ')+'</p>':'')+
+   '</section>';
+ }catch(ex){root.textContent='설문·GSR 조회 실패: '+friendly(ex)}
+}
+document.addEventListener('click',async e=>{
+ if(e.target?.id==='participant-admin-refresh'){await refreshParticipantAdmin();return}
+ const copy=e.target?.closest('[data-participant-copy]');
+ if(copy){try{await navigator.clipboard.writeText(copy.dataset.participantCopy);alert('입장 코드 복사 완료')}catch{alert('입장 코드: '+copy.dataset.participantCopy)}return}
+ const result=e.target?.closest('[data-participant-results]');
+ if(result){await participantAdminRead(result.dataset.participantResults)}
 });
