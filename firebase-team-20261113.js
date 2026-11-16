@@ -315,8 +315,8 @@ async function uploadGsrRun(run){
  const previous=gsrShared.inflight.get(id);
  if(previous){await previous;return uploadGsrRun(run)}
  const task=async()=>{
-  const samples=run.gsrSamples;
-  const count=samples.length;
+  const count=run.gsrSamples.length;
+  const samples=run.gsrSamples.slice(0,count);
   const last=gsrShared.verified.get(id)||{count:0,signature:''};
   const signature=JSON.stringify([run.startedAt,run.endedAt,run.steps,run.code,run.mode]);
   if(count===last.count&&signature===last.signature)return {verified:true,count};
