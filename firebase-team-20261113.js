@@ -1,6 +1,6 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
-import {getFirestore,collection,doc,getDoc,getDocs,onSnapshot,writeBatch,setDoc,serverTimestamp} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
+import {getFirestore,collection,doc,getDoc,getDocs,onSnapshot,writeBatch,setDoc,serverTimestamp,query,where} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
 
 const firebaseConfig = {
  apiKey:"AIzaSyCXtS-9hwvCb4c3NIOaSEkHUNejdGQHimA",
@@ -53,6 +53,7 @@ $('admin-publish').addEventListener('click',publish);
 $('guest-refresh').addEventListener('click',()=>{watchPublic(true)});
 
 function cleanup(){
+ deactivateGsrSharing();
  state.unsubs.forEach(fn=>fn());state.unsubs=[];state.cache={};state.pending.clear();state.started=false;state.ready=false;state.member=null;
  window.yurifCloud.ready=false;window.yurifCloud.initialData=null;
  clearTimeout(timer);state.queued=null;
@@ -84,6 +85,7 @@ onAuthStateChanged(auth,async user=>{
   window.yurifCloud.initialData=loaded;window.yurifCloud.ready=true;state.ready=true;window.yurifCloud.status='공동 데이터 연결됨';
   await loadWorkspace();
   show('workspace');
+  activateGsrSharing();
   $('cloud-status').textContent='공동 데이터 연결됨';
   if(member.role==='admin')renderAdmin();
   for(const type of types){
@@ -215,3 +217,158 @@ async function publish(){
  }catch(e){alert('공개 설정 저장 실패: '+friendly(e))}
  finally{btn.disabled=false}
 }
+
+
+/* GSR raw-data sharing for authorized team members only.
+ * Existing Firestore rules permit isMember() under teamData/{document=**}.
+ * 200-sample chunks ensure each document stays comfortably below 1 MiB.
+ */
+const GSR_CHUNK=200;
+const gsrShared={
+ runs:[],selected:'',points:[],chunks:[],offRuns:null,offSamples:null,
+ interval:null,inflight:new Map(),verified:new Map(),notice:'',lastRender:0
+};
+const gsrRunRef=id=>doc(store,'teamData','gsrRunIndex','items',String(id));
+const gsrChunks=collection(store,'teamData','gsrRawChunks','items');
+const gsrIndex=collection(store,'teamData','gsrRunIndex','items');
+function gsrPanel(){
+ if(!state.ready)return '<section class="panel"><h2>팀 공유 GSR 원시자료</h2><p>연구원 로그인 후 사용할 수 있습니다.</p></section>';
+ const selected=gsrShared.runs.find(r=>r.id===gsrShared.selected);
+ const n=gsrShared.points.length,vals=gsrShared.points.map(p=>p[1]);
+ const mean=n?(vals.reduce((x,y)=>x+y,0)/n).toFixed(2):'—';
+ const status=selected?(selected.endedAt?'실험 종료':'실험 진행 중'):'실험 선택 전';
+ return '<section class="panel" id="gsr-team-panel">'+
+ '<div class="entry-head"><div><h2>팀 공유 GSR 원시자료 · 실시간 조회</h2><p class="muted">승인된 관리자·연구원만 접근 · Arduino ADC 원시값(0~1023, µS 아님)</p></div></div>'+
+ '<div class="formgrid"><div class="field"><label>다른 컴퓨터에서 공유된 실험 선택</label><select id="gsr-team-select"><option value="">공유 실험 선택</option>'+
+ gsrShared.runs.map(r=>'<option value="'+safe(r.id)+'"'+(r.id===gsrShared.selected?' selected':'')+'>'+safe(r.date||'')+' · '+safe(r.code||'실험')+' · '+safe(r.mode==='pilot'?'예비실험':r.mode==='stage1'?'1차 실험':'2차 실험')+(r.endedAt?' · 종료':' · 진행 중')+'</option>').join('')+
+ '</select></div></div>'+
+ (gsrShared.runs.length?'':'<p class="muted">아직 팀에 공유된 GSR 실험이 없습니다. 새 실험 중에는 약 8초 간격으로 전송을 시도하며, 기존 기록은 실험실 아카이브에서 직접 공유할 수 있습니다.</p>')+
+ (selected?'<div class="gsr-live"><div><small>클라우드에 확인된 샘플</small><strong>'+n+' / '+(selected.sampleCount||0)+'</strong></div><div><small>ADC 평균</small><strong>'+mean+'</strong></div><div><small>실험 상태</small><strong>'+status+'</strong></div></div>'+
+ '<div class="gsr-chart-box"><canvas id="gsr-team-chart" width="900" height="280" role="img" aria-label="공유된 GSR 원시 ADC 측정값 시간대별 그래프"></canvas></div>'+
+ '<div class="actions"><button class="btn secondary" type="button" id="gsr-team-csv"'+(n?'':' disabled')+'>공유 원시값 CSV 다운로드</button></div>'+
+ '<p class="muted">각 구간: '+(selected.steps||[]).map(s=>safe(s.label||'')+' '+safe(s.envName||s.name||'')).join(' · ')+'</p>':'')+
+ (gsrShared.notice?'<p class="muted">'+safe(gsrShared.notice)+'</p>':'')+
+ '<p class="muted">실험 진행 중 최신 데이터 반영에는 수 초가 걸릴 수 있습니다. 네트워크 장애 시 측정 컴퓨터의 원본은 별도로 유지됩니다.</p></section>';
+}
+window.yurifGsrSharedPanel=gsrPanel;
+function drawGsrShared(){
+ const canvas=document.getElementById('gsr-team-chart');if(!canvas)return;
+ const ctx=canvas.getContext('2d');if(!ctx)return;
+ const width=Math.max(320,Math.floor(canvas.getBoundingClientRect().width||840));
+ const height=Math.max(180,Math.round(width*.34)),dpr=Math.min(devicePixelRatio||1,2);
+ canvas.width=Math.round(width*dpr);canvas.height=Math.round(height*dpr);
+ ctx.setTransform(dpr,0,0,dpr,0,0);ctx.fillStyle='#FAFCFE';ctx.fillRect(0,0,width,height);
+ const pts=gsrShared.points;
+ if(!pts.length){ctx.fillStyle='#637A8C';ctx.textAlign='center';ctx.font='13px system-ui';ctx.fillText('아직 서버에서 읽은 측정값이 없습니다.',width/2,height/2);return}
+ const left=47,right=14,top=15,bottom=30,W=width-left-right,H=height-top-bottom;
+ const start=pts[0][0],end=Math.max(start+1,pts[pts.length-1][0]);
+ const X=t=>left+W*(t-start)/(end-start),Y=v=>top+H*(1-v/1023);
+ ctx.font='11px system-ui';ctx.textAlign='right';ctx.textBaseline='middle';
+ for(const tick of [0,256,512,768,1023]){const y=Y(tick);ctx.strokeStyle='#DEEAF3';ctx.beginPath();ctx.moveTo(left,y);ctx.lineTo(width-right,y);ctx.stroke();ctx.fillStyle='#60778C';ctx.fillText(String(tick),left-6,y)}
+ const selected=gsrShared.runs.find(r=>r.id===gsrShared.selected);
+ for(const step of selected?.steps||[]){if(!step.startedAt)continue;const x=X(step.startedAt);if(x<left||x>width-right)continue;ctx.save();ctx.setLineDash([4,4]);ctx.strokeStyle='#C57E4B';ctx.beginPath();ctx.moveTo(x,top);ctx.lineTo(x,top+H);ctx.stroke();ctx.restore();ctx.fillStyle='#A4603B';ctx.textAlign='left';ctx.fillText(String(step.label||''),x+4,top+10)}
+ ctx.beginPath();ctx.strokeStyle='#246B9A';ctx.lineWidth=1.8;
+ const stride=Math.max(1,Math.ceil(pts.length/1700));
+ for(let i=0;i<pts.length;i+=stride){const p=pts[i];if(i===0)ctx.moveTo(X(p[0]),Y(p[1]));else ctx.lineTo(X(p[0]),Y(p[1]))}
+ const tail=pts[pts.length-1];ctx.lineTo(X(tail[0]),Y(tail[1]));ctx.stroke();
+ ctx.fillStyle='#60778C';ctx.textBaseline='top';ctx.textAlign='left';ctx.fillText('0초',left,height-bottom+7);ctx.textAlign='right';ctx.fillText(((end-start)/1000).toFixed(1)+'초',width-right,height-bottom+7);
+}
+function refreshGsrShared(){
+ const panel=document.getElementById('gsr-team-panel');if(!panel)return;
+ panel.outerHTML=gsrPanel();drawGsrShared();
+}
+function selectGsrShared(id){
+ if(gsrShared.offSamples){gsrShared.offSamples();gsrShared.offSamples=null}
+ gsrShared.selected=id;gsrShared.points=[];gsrShared.notice='';
+ if(!id){refreshGsrShared();return}
+ const q=query(gsrChunks,where('runId','==',id));
+ gsrShared.offSamples=onSnapshot(q,snapshot=>{
+  const chunks=snapshot.docs.map(d=>d.data()).filter(r=>Array.isArray(r.points)).sort((a,b)=>a.index-b.index);
+  const pts=[];for(const chunk of chunks)for(const p of chunk.points)if(Array.isArray(p)&&Number.isFinite(p[0])&&Number.isFinite(p[1]))pts.push(p);
+  gsrShared.points=pts;
+  refreshGsrShared();
+ },e=>{gsrShared.notice='원시값 조회 실패: '+friendly(e);refreshGsrShared()});
+ refreshGsrShared();
+}
+function activateGsrSharing(){
+ if(gsrShared.offRuns)return;
+ gsrShared.offRuns=onSnapshot(gsrIndex,snapshot=>{
+  gsrShared.runs=snapshot.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>(b.startedAt||0)-(a.startedAt||0));
+  refreshGsrShared();
+ },e=>{gsrShared.notice='공유 실험 목록 조회 실패: '+friendly(e);refreshGsrShared()});
+ gsrShared.interval=setInterval(()=>{
+  if(!state.ready||!auth.currentUser)return;
+  const run=window.yurifGetActiveGsrRun?.();
+  if(run?.startedAt&&!run.endedAt&&Array.isArray(run.gsrSamples)&&run.gsrSamples.length)uploadGsrRun(run).catch(()=>{});
+ },8000);
+}
+function deactivateGsrSharing(){
+ if(gsrShared.offRuns){gsrShared.offRuns();gsrShared.offRuns=null}
+ if(gsrShared.offSamples){gsrShared.offSamples();gsrShared.offSamples=null}
+ if(gsrShared.interval){clearInterval(gsrShared.interval);gsrShared.interval=null}
+ gsrShared.runs=[];gsrShared.selected='';gsrShared.points=[];gsrShared.verified.clear();
+}
+async function uploadGsrRun(run){
+ if(!state.ready||!auth.currentUser)throw new Error('승인된 연구원 로그인 필요');
+ if(!run||!run.id||!Array.isArray(run.gsrSamples))throw new Error('GSR 원시값이 존재하지 않습니다');
+ const id=String(run.id);
+ const previous=gsrShared.inflight.get(id);
+ if(previous){await previous;return uploadGsrRun(run)}
+ const task=async()=>{
+  const samples=run.gsrSamples;
+  const count=samples.length;
+  const last=gsrShared.verified.get(id)||{count:0,signature:''};
+  const signature=JSON.stringify([run.startedAt,run.endedAt,run.steps,run.code,run.mode]);
+  if(count===last.count&&signature===last.signature)return {verified:true,count};
+  const firstChunk=Math.max(0,Math.floor(Math.max(0,last.count-1)/GSR_CHUNK));
+  const lastChunk=Math.floor(Math.max(0,count-1)/GSR_CHUNK);
+  for(let index=firstChunk;index<=lastChunk&&count;index+=1){
+   const points=samples.slice(index*GSR_CHUNK,(index+1)*GSR_CHUNK);
+   if(!points.length)continue;
+   await setDoc(doc(store,'teamData','gsrRawChunks','items',id+'__'+String(index).padStart(5,'0')),{runId:id,index,points,sampleCount:points.length});
+  }
+  const meta={id,code:String(run.code||'').slice(0,60),date:run.date||'',mode:run.mode,
+   startedAt:run.startedAt||null,endedAt:run.endedAt||null,
+   steps:(run.steps||[]).map(s=>({label:s.label||'',name:s.name||'',envName:s.envName||'',startedAt:s.startedAt||null,endedAt:s.endedAt||null})),
+   sampleCount:count,updatedAt:serverTimestamp()};
+  await setDoc(gsrRunRef(id),meta);
+  const verified=await getDoc(gsrRunRef(id));
+  const finalChunk=count?await getDoc(doc(store,'teamData','gsrRawChunks','items',id+'__'+String(lastChunk).padStart(5,'0'))):null;
+  if(!verified.exists()||verified.data().sampleCount!==count||(count&&(!finalChunk?.exists()||finalChunk.data().points.length!==count-lastChunk*GSR_CHUNK)))throw new Error('서버 저장 개수 재확인 실패');
+  gsrShared.verified.set(id,{count,signature});
+  return {verified:true,count};
+ };
+ const promise=task();gsrShared.inflight.set(id,promise);
+ try{return await promise}finally{if(gsrShared.inflight.get(id)===promise)gsrShared.inflight.delete(id)}
+}
+window.yurifGsrSharing={
+ upload:uploadGsrRun,
+ status:id=>gsrShared.verified.get(id)||null
+};
+document.addEventListener('change',e=>{
+ if(e.target.id==='gsr-team-select')selectGsrShared(e.target.value);
+});
+document.addEventListener('click',async e=>{
+ const csv=e.target.closest('#gsr-team-csv');
+ if(csv){
+  const run=gsrShared.runs.find(r=>r.id===gsrShared.selected);if(!run)return;
+  const lines=['timestamp_ms,iso_datetime,elapsed_seconds,segment,environment,adc_raw'];
+  for(const [t,v] of gsrShared.points){
+   const s=(run.steps||[]).find(x=>x.startedAt&&t>=x.startedAt&&t<(x.endedAt||run.endedAt||Infinity));
+   const quote=v=>'"'+String(v??'').replaceAll('"','""')+'"';
+   lines.push([t,new Date(t).toISOString(),((t-run.startedAt)/1000).toFixed(3),quote(s?.label||''),quote(s?.envName||s?.name||''),v].join(','));
+  }
+  const file=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
+  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download='yurif-shared-gsr-'+(run.date||'')+'-'+(run.code||'experiment')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);return;
+ }
+ const b=e.target.closest('[data-gsr-share]');
+ if(!b)return;
+ const id=b.dataset.gsrShare;
+ const run=window.yurifFindGsrRun?.(id);
+ if(!run)return alert('이 컴퓨터에서 해당 실험 원본을 찾지 못했습니다.');
+ if(!confirm('이 실험의 GSR 원시값 '+(run.gsrSamples?.length||0)+'개를 승인된 연구원들과 공유할까요? 참가자의 동의와 익명 코드 사용 여부를 확인해 주세요.'))return;
+ b.disabled=true;b.textContent='클라우드로 전송 중…';
+ try{const result=await uploadGsrRun(run);alert('서버 저장 확인 완료: GSR 원시값 '+result.count+'개. 연구원은 팀 공유 GSR 원시자료 메뉴에서 볼 수 있습니다.');}
+ catch(err){alert('서버 업로드 실패: '+friendly(err)+'\n원본은 이 컴퓨터에 남아 있습니다. 다시 시도해 주세요.')}
+ finally{b.disabled=false;b.textContent='팀원과 GSR 원시값 공유'}
+});
