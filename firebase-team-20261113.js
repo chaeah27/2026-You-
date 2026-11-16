@@ -519,12 +519,14 @@ function participantAdminHtml(){
  '<div id="participant-admin-results">'+(participantState.adminRows||[]).join('')+'</div></section>';
 }
 window.yurifParticipantAdminHtml=participantAdminHtml;
+window.yurifParticipantSessionHtml=()=>'<section class="panel"><h2>참가자 설문 · GSR 통합 결과</h2><p class="muted">참가자의 사전 동의·감각 환경별 설문·GSR 원시값을 함께 확인합니다. 측정값은 보정 전 ADC입니다.</p><div class="formgrid"><div class="field"><label>참가자 선택</label><select id="participant-session-picker"><option value="">선택하세요</option>'+participantState.adminPlans.map(p=>'<option value="'+safe(p.key)+'">'+safe(p.code)+' · '+(p.stage==='stage1'?'1차':'2차')+'</option>').join('')+'</select></div></div><div id="participant-session-results" class="muted">등록된 참가자와 설문을 선택해 주세요.</div></section>';
 async function refreshParticipantAdmin(){
  if(!state.ready)return;
  try{
   const snapshot=await getDocs(collection(store,'participantAccess'));
   participantState.adminPlans=snapshot.docs.map(d=>({key:d.id,...d.data()})).sort((a,b)=>String(a.code).localeCompare(String(b.code)));
   if(document.getElementById('content')&&window.yurifParticipantAdminRefreshView)window.yurifParticipantAdminRefreshView();
+  const sessionPicker=$('participant-session-picker');if(sessionPicker){const prev=sessionPicker.value;sessionPicker.innerHTML='<option value="">선택하세요</option>'+participantState.adminPlans.map(p=>'<option value="'+safe(p.key)+'">'+safe(p.code)+' · '+(p.stage==='stage1'?'1차':'2차')+'</option>').join('');sessionPicker.value=prev;}
  }catch(ex){const node=$('participant-admin-list');if(node)node.textContent='참가자 목록 불러오기 실패: '+friendly(ex)}
 }
 window.yurifParticipantAdminLoad=refreshParticipantAdmin;
@@ -560,8 +562,8 @@ document.addEventListener('submit',async e=>{
  }catch(ex){alert('참가자 등록 실패: '+friendly(ex))}
  finally{button.disabled=false}
 });
-async function participantAdminRead(key){
- const root=$('participant-admin-results');
+async function participantAdminRead(key,elementId='participant-admin-results'){
+ const root=$(elementId);
  if(!root)return;
  root.textContent='동의 및 설문 응답을 불러오는 중…';
  const plan=participantState.adminPlans.find(p=>p.key===key);if(!plan)return;
@@ -603,6 +605,7 @@ async function participantAdminRead(key){
    '</section>';
  }catch(ex){root.textContent='설문·GSR 조회 실패: '+friendly(ex)}
 }
+document.addEventListener('change',async e=>{if(e.target?.id==='participant-session-picker'&&e.target.value)await participantAdminRead(e.target.value,'participant-session-results')});
 document.addEventListener('click',async e=>{
  if(e.target?.id==='participant-admin-refresh'){await refreshParticipantAdmin();return}
  const copy=e.target?.closest('[data-participant-copy]');
