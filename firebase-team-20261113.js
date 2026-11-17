@@ -395,7 +395,7 @@ $('researcher-signup-form').addEventListener('submit',async e=>{
  }catch(ex){$('signup-message').textContent='계정 생성 실패: '+friendly(ex)}
  finally{researcherSigningUp=false;btn.disabled=false;$('signup-password').value=''}
 });
-const participantState={key:'',plan:null,consent:null,answers:new Map(),adminPlans:[],adminSelected:'',adminRows:[],adminBusy:false};
+const participantState={key:'',plan:null,consent:null,answers:new Map(),adminPlans:[],adminSelected:'',adminRows:[],adminBusy:false,fields:[]};
 const participantPlanRef=key=>doc(store,'participantAccess',key);
 const participantConsentRef=key=>doc(store,'participantConsents',key);
 const participantAnswerRef=(key,slot)=>doc(store,'participantAnswers',key,'items',slot);
@@ -445,12 +445,65 @@ $('participant-entry-form').addEventListener('submit',async e=>{
  }catch(ex){portalMsg('입장할 수 없습니다: '+friendly(ex))}
  finally{btn.disabled=false}
 });
+
+function preClean(html){
+ const d=new DOMParser().parseFromString(String(html||''),'text/html');
+ const ok=new Set(['B','STRONG','EM','I','U','P','DIV','BR','UL','OL','LI','H3']);
+ function walk(n){
+  if(n.nodeType===3)return safe(n.textContent);
+  if(n.nodeType!==1)return '';
+  if(['SCRIPT','STYLE','IFRAME','SVG','OBJECT'].includes(n.tagName))return '';
+  const inner=Array.from(n.childNodes).map(walk).join('');
+  if(!ok.has(n.tagName))return inner;
+  const t=({B:'strong',I:'em',DIV:'p'}[n.tagName]||n.tagName.toLowerCase());
+  return t==='br'?'<br>':'<'+t+'>'+inner+'</'+t+'>';
+ }
+ return Array.from(d.body.childNodes).map(walk).join('');
+}
+function preOptions(q){return String(q.options||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean).slice(0,25)}
+function preFieldsEditor(){
+ return participantState.fields.map((q,i)=>'<div class="pre-edit-item"><label>질문 '+(i+1)+'</label><input data-pre-title="'+i+'" value="'+safe(q.label)+'" maxlength="200" placeholder="질문 내용">'+
+ '<label>질문 유형</label><select data-pre-type="'+i+'">'+[['select','드롭다운'],['radio','단일 선택'],['checkbox','복수 선택'],['text','서술형']].map(a=>'<option value="'+a[0]+'" '+(q.type===a[0]?'selected':'')+'>'+a[1]+'</option>').join('')+'</select>'+
+ (q.type==='text'?'':'<label>선택지 (한 줄에 하나씩)</label><textarea data-pre-options="'+i+'" rows="3">'+safe(q.options)+'</textarea>')+
+ '<label class="participant-confirm"><input type="checkbox" data-pre-required="'+i+'" '+(q.required?'checked':'')+'> 필수 응답</label><button type="button" class="btn secondary" data-pre-delete="'+i+'">삭제</button></div>').join('');
+}
+function preBuilder(){
+ return '<div class="field"><label>사전 안내서 및 동의 설명문 (필수)</label><div class="pre-toolbar"><button type="button" data-pre-format="bold">굵게</button><button type="button" data-pre-format="underline">밑줄</button><button type="button" data-pre-format="insertUnorderedList">목록</button></div>'+
+ '<div id="pre-rich" class="pre-rich" contenteditable="true" role="textbox" aria-multiline="true" data-placeholder="연구 목적, 절차, 예상되는 불편, 중단 권리, 자료 보관과 문의 방법을 작성해 주세요."></div></div>'+
+ '<div class="pre-builder"><h3>사전 설문 항목</h3><p class="muted">드롭다운·단일 선택·복수 선택·서술형을 추가할 수 있습니다.</p><div id="pre-editor-fields">'+preFieldsEditor()+'</div><button type="button" class="btn secondary" id="pre-add">＋ 질문 추가</button></div>';
+}
+function preQuestionHtml(q,i){
+ const name='pre'+i,opts=Array.isArray(q.options)?q.options:[];
+ let html='';
+ if(q.type==='select')html='<select name="'+name+'" '+(q.required?'required':'')+'><option value="">선택해 주세요</option>'+opts.map((v,j)=>'<option value="'+j+'">'+shortText(v)+'</option>').join('')+'</select>';
+ if(q.type==='radio')html='<div class="pre-choices">'+opts.map((v,j)=>'<label><input type="radio" name="'+name+'" value="'+j+'" '+(q.required?'required':'')+'> '+shortText(v)+'</label>').join('')+'</div>';
+ if(q.type==='checkbox')html='<div class="pre-choices">'+opts.map((v,j)=>'<label><input type="checkbox" name="'+name+'" value="'+j+'"> '+shortText(v)+'</label>').join('')+'</div>';
+ if(q.type==='text')html='<textarea name="'+name+'" maxlength="800" rows="3" '+(q.required?'required':'')+'></textarea>';
+ return '<div class="field"><label>'+shortText(q.label)+(q.required?' *':'')+'</label>'+html+'</div>';
+}
+document.addEventListener('click',e=>{
+ const t=e.target;
+ if(t.id==='pre-add'){if(participantState.fields.length>=20)return alert('질문은 최대 20개입니다.');participantState.fields.push({type:'radio',label:'',options:'동의\n비동의',required:true});$('pre-editor-fields').innerHTML=preFieldsEditor()}
+ if(t.hasAttribute('data-pre-delete')){participantState.fields.splice(Number(t.dataset.preDelete),1);$('pre-editor-fields').innerHTML=preFieldsEditor()}
+ if(t.hasAttribute('data-pre-format')){e.preventDefault();$('pre-rich')?.focus();document.execCommand(t.dataset.preFormat,false,null)}
+});
+document.addEventListener('input',e=>{
+ const t=e.target;
+ if(t.hasAttribute('data-pre-title'))participantState.fields[Number(t.dataset.preTitle)].label=t.value;
+ if(t.hasAttribute('data-pre-options'))participantState.fields[Number(t.dataset.preOptions)].options=t.value;
+});
+document.addEventListener('change',e=>{
+ const t=e.target;
+ if(t.hasAttribute('data-pre-type')){participantState.fields[Number(t.dataset.preType)].type=t.value;$('pre-editor-fields').innerHTML=preFieldsEditor()}
+ if(t.hasAttribute('data-pre-required'))participantState.fields[Number(t.dataset.preRequired)].required=t.checked;
+});
+
 function renderParticipantSteps(){
  const root=$('participant-steps'),plan=participantState.plan,consent=participantState.consent;
  if(!root||!plan)return;
  if(!consent){
   root.innerHTML='<section class="panel"><h2>사전 안내서 확인하기</h2>'+
-   '<details id="participant-info"><summary>사전 안내서 열기</summary><div class="participant-consent-copy">'+shortText(plan.consentText).replace(/\n/g,'<br>')+'</div></details>'+
+   '<details id="participant-info" open><summary>사전 안내서 열기</summary><div class="participant-consent-copy">'+(plan.consentHtml?preClean(plan.consentHtml):shortText(plan.consentText).replace(/\n/g,'<br>'))+'</div></details>'+ '<form id="pre-response"><h3>사전 설문</h3>'+(plan.preQuestions||[]).map(preQuestionHtml).join('')+'</form>'+
    '<label class="participant-confirm"><input type="checkbox" id="participant-read-check"> 안내서를 읽고 연구 목적·절차·중단 권리를 확인했습니다.</label>'+
    '<div class="actions"><button type="button" class="btn" id="participant-agree">동의</button>'+
    '<button type="button" class="btn secondary" id="participant-decline">비동의</button></div>'+
@@ -481,7 +534,25 @@ function renderParticipantSteps(){
 async function recordParticipantConsent(agreed){
  if(!participantState.plan||!participantState.key||!auth.currentUser?.isAnonymous)return;
  if(agreed&&!$('participant-read-check')?.checked)return portalMsg('안내서 확인란에 먼저 체크해 주세요.');
- const data={uid:auth.currentUser.uid,agreed,createdAt:serverTimestamp()};
+ const plan=participantState.plan,preAnswers={};
+ if(agreed){
+  const form=$('pre-response');if(!form?.reportValidity())return portalMsg('필수 사전 설문에 응답해 주세요.');
+  const data=new FormData(form);
+  for(let i=0;i<(plan.preQuestions||[]).length;i++){
+   const q=plan.preQuestions[i],values=data.getAll('pre'+i).map(String),opts=q.options||[];
+   if(q.required&&!values.length)return portalMsg('필수 질문에 응답해 주세요: '+q.label);
+   if(q.type==='text'){
+    const v=String(values[0]||'').trim().slice(0,800);
+    if(q.required&&!v)return portalMsg('필수 질문에 응답해 주세요: '+q.label);
+    preAnswers[q.id]=v;
+   }else{
+    if(values.some(v=>!Number.isInteger(Number(v))||Number(v)<0||Number(v)>=opts.length))return portalMsg('선택 항목을 다시 확인해 주세요.');
+    preAnswers[q.id]=q.type==='checkbox'?values.map(v=>opts[Number(v)]):(values.length?opts[Number(values[0])]:'');
+   }
+  }
+ }
+ const data={uid:auth.currentUser.uid,agreed,preAnswers,infoVersion:plan.infoVersion||'legacy',
+ infoSnapshot:{consentText:plan.consentText||'',consentHtml:plan.consentHtml||'',preQuestions:plan.preQuestions||[]},createdAt:serverTimestamp()};
  try{
   await setDoc(participantConsentRef(participantState.key),data);
   const stored=await getDoc(participantConsentRef(participantState.key));
@@ -525,7 +596,7 @@ function participantAdminHtml(){
  '<form id="participant-plan-form"><div class="formgrid"><div class="field"><label>연구용 참가자 코드</label><input name="code" maxlength="30" required placeholder="P01"></div>'+
  '<div class="field"><label>실험 단계</label><select name="stage" id="participant-plan-stage"><option value="stage1">1차 감각 환경 실험</option><option value="stage2">2차 대화 실험</option></select></div></div>'+
  '<div class="field"><label>참가자에게 적용할 감각 환경 순서 (1차 실험 · 한 줄에 하나씩)</label><textarea name="order" rows="5" placeholder="조도 300 lx · 4000 K&#10;조용한 교실&#10;바닐라 향" required></textarea></div>'+
- '<div class="field"><label>사전 안내서 및 동의 설명문 (직접 작성 · 필수)</label><textarea name="consentText" rows="7" required placeholder="연구 목적, 실험 절차와 시간, 측정 자료 및 설문 저장 방식, 예상되는 불편, 자발적 참여와 중단 권리, 문의 방법, 보존 기간을 정확히 작성하세요."></textarea></div>'+
+ preBuilder()+
  '<div class="field"><label>쾌·불쾌 설문 문항</label><input name="valenceQuestion" maxlength="240" value="현재 느끼는 쾌·불쾌 정도 (1 매우 불쾌 ~ 9 매우 쾌적)"></div>'+
  '<div class="field"><label>각성 설문 문항</label><input name="arousalQuestion" maxlength="240" value="현재 각성 수준 (1 매우 낮음 ~ 9 매우 높음)"></div>'+
  '<div class="field"><label>대인 호감 설문 문항 (2차)</label><input name="likingQuestion" maxlength="240" value="대화 상대에 대한 호감 정도 (1 매우 낮음 ~ 9 매우 높음)"></div>'+
@@ -565,11 +636,13 @@ document.addEventListener('submit',async e=>{
  const d=Object.fromEntries(new FormData(e.target)),code=String(d.code||'').trim();
  const stage=d.stage==='stage2'?'stage2':'stage1';
  const order=stage==='stage1'?String(d.order||'').split(/\r?\n/).map(s=>s.trim()).filter(Boolean):['대화 종료'];
- const consentText=String(d.consentText||'').trim();
+ const consentText=String($('pre-rich')?.innerText||'').trim().slice(0,15000),consentHtml=preClean($('pre-rich')?.innerHTML||'');
  if(!code||!order.length||!consentText)return alert('참가자 코드, 환경 순서, 안내서를 확인해 주세요.');
+ const preQuestions=participantState.fields.map((q,i)=>({id:'q'+(i+1),label:q.label.trim().slice(0,200),type:q.type,required:q.required,options:q.type==='text'?[]:preOptions(q)}));
+ if(preQuestions.some(q=>!q.label||(q.type!=='text'&&q.options.length<2)))return alert('질문 제목과 선택지(2개 이상)를 확인해 주세요.');
  if(participantState.adminPlans.some(p=>p.code===code&&p.stage===stage&&p.active))return alert('같은 참가자 코드·실험 단계가 이미 등록되어 있습니다. 기존 등록 정보를 확인해 주세요.');
  const key=Array.from(crypto.getRandomValues(new Uint8Array(16)),b=>b.toString(16).padStart(2,'0')).join('');
- const plan={code,stage,order,consentText,active:true,valenceQuestion:String(d.valenceQuestion||'').slice(0,240),
+ const plan={code,stage,order,consentText,consentHtml,preQuestions,infoVersion:new Date().toISOString(),active:true,valenceQuestion:String(d.valenceQuestion||'').slice(0,240),
   arousalQuestion:String(d.arousalQuestion||'').slice(0,240),likingQuestion:String(d.likingQuestion||'').slice(0,240),
   createdAt:serverTimestamp()};
  const button=$('participant-plan-create');button.disabled=true;
@@ -611,7 +684,7 @@ async function participantAdminRead(key,elementId='participant-admin-results'){
   const slots=participantSurveySlots(plan);
   root.innerHTML='<section class="panel"><h3>'+shortText(plan.code)+' · 설문·GSR 확인</h3>'+
    '<p>사전 동의: '+(!consent?'아직 응답 없음':consent.agreed?'동의':'비동의')+
-   ' / 설문 완료: '+answers.size+' / '+slots.length+'</p>'+
+   ' / 설문 완료: '+answers.size+' / '+slots.length+'</p>'+ (consent?'<div class="pre-admin-answers"><h4>사전 설문 응답</h4><p class="muted">안내서 버전: '+shortText(consent.infoVersion||'이전 버전')+'</p>'+(consent.agreed?(consent.infoSnapshot?.preQuestions||plan.preQuestions||[]).map(q=>'<p><strong>'+shortText(q.label)+'</strong>: '+shortText(Array.isArray(consent.preAnswers?.[q.id])?consent.preAnswers[q.id].join(', '):(consent.preAnswers?.[q.id]||'미응답'))+'</p>').join(''):'비동의 · 사전 응답 미수집')+'</div>':'')+
    '<div class="tablewrap"><table><thead><tr><th>구간 · 환경</th><th>설문 저장</th><th>쾌·불쾌</th><th>각성</th><th>대인 호감</th><th>GSR ADC</th></tr></thead><tbody>'+
    slots.map(slot=>{
     const answer=answers.get(slot.slot);
@@ -636,7 +709,7 @@ document.addEventListener('click',async e=>{
   const key=deactivate.dataset.participantDeactivate;
   if(!confirm('이 참가자의 입장 코드를 비활성화할까요? 이미 저장된 동의·설문 데이터는 삭제되지 않습니다.'))return;
   try{const p=participantState.adminPlans.find(x=>x.key===key);if(!p)return;
-   await setDoc(participantPlanRef(key),{code:p.code,stage:p.stage,order:p.order,consentText:p.consentText,active:false,valenceQuestion:p.valenceQuestion||'',arousalQuestion:p.arousalQuestion||'',likingQuestion:p.likingQuestion||'',createdAt:p.createdAt||serverTimestamp()});
+   await setDoc(participantPlanRef(key),{code:p.code,stage:p.stage,order:p.order,consentText:p.consentText,consentHtml:p.consentHtml||'',preQuestions:p.preQuestions||[],infoVersion:p.infoVersion||'legacy',active:false,valenceQuestion:p.valenceQuestion||'',arousalQuestion:p.arousalQuestion||'',likingQuestion:p.likingQuestion||'',createdAt:p.createdAt||serverTimestamp()});
    await refreshParticipantAdmin();alert('입장 코드 사용을 중지했습니다.');
   }catch(ex){alert('참가 코드 비활성화 실패: '+friendly(ex))}
   return;
