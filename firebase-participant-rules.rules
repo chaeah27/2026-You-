@@ -93,6 +93,72 @@ service cloud.firestore {
     );
    allow update, delete: if false;
   }
+  // V2 experimental registrations are available only to approved researchers.
+  match /experimentsV2/{experimentId}{
+   allow get, list: if isMember();
+   allow create: if isMember()
+    && request.resource.data.stage == 'stage1'
+    && request.resource.data.order is list
+    && request.resource.data.order.size() == 10;
+   // Ordering and experiment identity are permanent once registered.
+   allow update: if isMember()
+    && request.resource.data.order == resource.data.order
+    && request.resource.data.accessKey == resource.data.accessKey
+    && request.resource.data.code == resource.data.code
+    && request.resource.data.stage == resource.data.stage;
+   allow delete: if false;
+  }
+  match /experimentProgress/{token}{
+   allow get: if isMember() || agreed(token);
+   allow list: if isMember();
+   allow create: if isMember()
+    && exists(/databases/$(database)/documents/participantAccess/$(token));
+   allow update: if isMember()
+    && request.resource.data.experimentId == resource.data.experimentId
+    && request.resource.data.code == resource.data.code
+    && request.resource.data.phase in ['registered','measurement','restReady','rest','setup','survey','completed','aborted'];
+   allow delete: if false;
+  }
+  // Each survey answer is immutable; the participant may submit only
+  // while the researcher has unlocked this exact survey slot.
+  match /participantAnswersV2/{token}/items/{slot}{
+   allow get, list: if isMember() || agreed(token);
+   allow create: if agreed(token)
+    && !isMember()
+    && exists(/databases/$(database)/documents/experimentProgress/$(token))
+    && get(/databases/$(database)/documents/experimentProgress/$(token)).data.phase == 'survey'
+    && get(/databases/$(database)/documents/experimentProgress/$(token)).data.surveySlot == slot
+    && request.resource.data.keys().hasOnly(['uid','slot','position','stage','ranking','discomfort','rating','createdAt'])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.createdAt == request.time
+    && request.resource.data.slot == slot
+    && request.resource.data.stage == 'stage1'
+    && request.resource.data.position is int
+    && request.resource.data.position == get(/databases/$(database)/documents/experimentProgress/$(token)).data.position
+    && (
+      (slot == 'visual'
+       && request.resource.data.position == 3
+       && request.resource.data.ranking is list
+       && request.resource.data.ranking.size() == 4
+       && request.resource.data.discomfort is list
+       && request.resource.data.discomfort.size() <= 4)
+      ||
+      (slot.matches('olfactory-[0-3]')
+       && request.resource.data.position >= 4
+       && request.resource.data.position <= 7
+       && request.resource.data.rating is int
+       && request.resource.data.rating >= 1
+       && request.resource.data.rating <= 5)
+      ||
+      (slot.matches('auditory-[0-1]')
+       && request.resource.data.position >= 8
+       && request.resource.data.position <= 9
+       && request.resource.data.rating is int
+       && request.resource.data.rating >= 1
+       && request.resource.data.rating <= 5)
+    );
+   allow update, delete: if false;
+  }
   match /{document=**}{allow read, write: if false;}
  }
 }
