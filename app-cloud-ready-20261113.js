@@ -618,6 +618,7 @@ async function restoreLabAdcFromJournal(){
   }
  }catch(err){console.warn('독립 ADC 복구 실패',err)}
 }
+window.yurifV2ActiveRunId=()=>labDraft?.v2&&!labDraft.endedAt?labDraft.id:null;
 window.yurifV2EnvironmentList=()=>Array.isArray(db.sensoryEnvironments)?db.sensoryEnvironments:[];
 window.yurifV2ConnectedSensor=()=>typeof gsrDevice!=='undefined'&&gsrDevice.connected===true;
 window.yurifV2PrepareLab=async(plan,segments)=>{
