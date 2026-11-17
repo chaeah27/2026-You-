@@ -182,6 +182,7 @@ export function installYurifV2({auth,store}){
     if(!snap.exists()||snap.data().phase!==expected)throw Error('다른 화면에서 실험 상태가 변경되었습니다. 새로고침하여 확인하세요.');
     tx.update(ref,{...payload,phase:next,updatedAt:serverTimestamp()});
    });
+   state.progress={...state.progress,...payload,phase:next};
   }finally{state.transitioning=false;refreshLab()}
  }
  async function beginStep(kind){
