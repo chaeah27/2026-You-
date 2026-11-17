@@ -393,8 +393,8 @@ async function verifyFullGsrRun(run){
    throw Error('청크 '+i+' 누락 또는 개수 오류');
   for(let j=0;j<items.length;j++){
    const actual=chunk.points[j],wanted=items[j];
-   if(!Array.isArray(actual)||actual[0]!==wanted[0]||actual[1]!==wanted[1])
-    throw Error('청크 '+i+' · '+j+' 원시값 불일치');
+   if(!Array.isArray(actual)||actual.length!==wanted.length||actual.some((value,k)=>value!==wanted[k]))
+    throw Error('청크 '+i+' · '+j+' 원시값 또는 구간 분류 불일치');
   }
   readCount+=items.length;
  }
