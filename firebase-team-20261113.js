@@ -1,5 +1,5 @@
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
-import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,signInAnonymously,signOut} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
+import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,signInAnonymously,signOut} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
 import {getFirestore,collection,doc,getDoc,getDocs,onSnapshot,writeBatch,setDoc,serverTimestamp,query,where} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
 
 const firebaseConfig = {
@@ -47,7 +47,7 @@ $('login-form').addEventListener('submit',async e=>{
  finally{btn.disabled=false;$('login-password').value=''}
 });
 $('logout').addEventListener('click',async()=>{cleanup();await signOut(auth);show('entry-screen')});
-$('open-admin-settings').addEventListener('click',()=>{if(state.member?.role==='admin'){show('workspace');$('admin-drawer').hidden=false;renderAdmin()}});
+$('open-admin-settings').addEventListener('click',()=>{if(state.member?.role==='admin'){show('workspace');$('admin-drawer').hidden=false;renderAdmin();renderTeamMemberManager()}});
 $('close-admin-settings').addEventListener('click',()=>$('admin-drawer').hidden=true);
 $('admin-publish').addEventListener('click',publish);
 $('guest-refresh').addEventListener('click',()=>{watchPublic(true)});
@@ -68,6 +68,7 @@ onAuthStateChanged(auth,async user=>{
   const snap=await getDoc(doc(store,'members',user.uid));
   const member=snap.exists()?snap.data():null;
   if(!member?.active||!['admin','researcher'].includes(member.role)){
+   if(researcherSigningUp){state.started=false;return}
    await signOut(auth);state.started=false;
    show('login-screen');error('아직 승인된 연구팀 계정이 아닙니다. Firestore members 문서의 UID, role, active를 확인해 주세요.');return;
   }
@@ -88,7 +89,7 @@ onAuthStateChanged(auth,async user=>{
   show('workspace');
   activateGsrSharing();
   $('cloud-status').textContent='공동 데이터 연결됨';
-  if(member.role==='admin')renderAdmin();
+  if(member.role==='admin'){renderAdmin();renderTeamMemberManager()}
   for(const type of types){
    const unsub=onSnapshot(collection(store,'teamData',type,'items'),snapshot=>{
     if(state.pending.has(type))return;
@@ -377,6 +378,21 @@ document.addEventListener('click',async e=>{
 /* Participant portal. Anonymous Firebase auth is REQUIRED.
    An entry key is a cryptographically random 128-bit bearer capability,
    not the human-readable P01 code. Never expose records to public visitors. */
+let researcherSigningUp=false;
+$('researcher-signup-form').addEventListener('submit',async e=>{
+ e.preventDefault();
+ const email=$('signup-email').value.trim(),password=$('signup-password').value;
+ const btn=$('signup-submit');btn.disabled=true;researcherSigningUp=true;
+ $('signup-message').textContent='계정 생성 중…';
+ try{
+  const result=await createUserWithEmailAndPassword(auth,email,password);
+  const uid=result.user.uid;
+  $('signup-message').textContent='계정이 생성되었습니다. 관리자에게 다음 UID를 전달하세요: '+uid+' / 관리자 승인 후 로그인할 수 있습니다.';
+  await signOut(auth);
+  show('login-screen');
+ }catch(ex){$('signup-message').textContent='계정 생성 실패: '+friendly(ex)}
+ finally{researcherSigningUp=false;btn.disabled=false;$('signup-password').value=''}
+});
 const participantState={key:'',plan:null,consent:null,answers:new Map(),adminPlans:[],adminSelected:'',adminRows:[],adminBusy:false};
 const participantPlanRef=key=>doc(store,'participantAccess',key);
 const participantConsentRef=key=>doc(store,'participantConsents',key);
@@ -612,4 +628,49 @@ document.addEventListener('click',async e=>{
  if(copy){try{await navigator.clipboard.writeText(copy.dataset.participantCopy);alert('입장 코드 복사 완료')}catch{alert('입장 코드: '+copy.dataset.participantCopy)}return}
  const result=e.target?.closest('[data-participant-results]');
  if(result){await participantAdminRead(result.dataset.participantResults)}
+});
+
+async function renderTeamMemberManager(){
+ if(state.member?.role!=='admin')return;
+ const drawer=$('admin-drawer');if(!drawer)return;
+ const panel=drawer.querySelector('.yurif-admin-panel');if(!panel)return;
+ let section=$('team-member-manager');
+ if(!section){
+  section=document.createElement('section');section.id='team-member-manager';section.className='yurif-admin-members';
+  panel.append(section);
+ }
+ section.innerHTML='<h3>연구원 계정 승인 및 관리</h3>'+
+  '<p>연구원은 로그인 화면에서 이메일·비밀번호로 계정을 만들고, 생성된 UID를 관리자에게 전달합니다. UID가 정확한지 확인한 후 승인하세요.</p>'+
+  '<form id="team-member-approve-form"><label for="team-member-uid">연구원 Firebase UID</label><input id="team-member-uid" required minlength="10" maxlength="128" placeholder="연구원이 전달한 UID">'+
+  '<button type="submit" class="yurif-smallbtn">연구원 승인</button></form><div id="team-member-list">승인된 계정 조회 중…</div>';
+ try{
+  const docs=await getDocs(collection(store,'members'));
+  const list=docs.docs.map(d=>({uid:d.id,...d.data()}));
+  const root=$('team-member-list');if(!root)return;
+  root.innerHTML=list.length?list.map(m=>'<div class="yurif-member-row"><code>'+safe(m.uid)+'</code> <strong>'+safe(m.role||'')+'</strong> '+
+   (m.active?'활성':'비활성')+
+   (m.role==='researcher'?'<button type="button" class="yurif-smallbtn" data-member-toggle="'+safe(m.uid)+'" data-member-active="'+(m.active?'0':'1')+'">'+(m.active?'접근 중지':'접근 재개')+'</button>':'')+'</div>').join(''):'등록된 연구팀 계정이 없습니다.';
+ }catch(ex){const root=$('team-member-list');if(root)root.textContent='팀 계정 조회 실패: '+friendly(ex)}
+}
+document.addEventListener('submit',async e=>{
+ if(e.target?.id!=='team-member-approve-form')return;
+ e.preventDefault();if(state.member?.role!=='admin')return;
+ const uid=$('team-member-uid').value.trim();
+ if(!/^[A-Za-z0-9_-]{10,128}$/.test(uid))return alert('연구원의 Firebase UID를 확인해 주세요.');
+ if(!confirm('이 UID를 승인된 연구원으로 등록할까요? UID의 소유자를 먼저 확인해 주세요.'))return;
+ try{
+  await setDoc(doc(store,'members',uid),{role:'researcher',active:true});
+  const check=await getDoc(doc(store,'members',uid));
+  if(!check.exists()||check.data().role!=='researcher'||check.data().active!==true)throw Error('승인 결과 확인 실패');
+  await renderTeamMemberManager();alert('연구원 승인 완료. 해당 연구원이 본인 계정으로 로그인할 수 있습니다.');
+ }catch(ex){alert('연구원 승인 실패: '+friendly(ex))}
+});
+document.addEventListener('click',async e=>{
+ const b=e.target?.closest('[data-member-toggle]');if(!b||state.member?.role!=='admin')return;
+ const uid=b.dataset.memberToggle,active=b.dataset.memberActive==='1';
+ if(!confirm('연구원 '+uid+'의 접근을 '+(active?'다시 허용':'중지')+'할까요?'))return;
+ try{
+  await setDoc(doc(store,'members',uid),{role:'researcher',active});
+  await renderTeamMemberManager();
+ }catch(ex){alert('접근 권한 변경 실패: '+friendly(ex))}
 });
