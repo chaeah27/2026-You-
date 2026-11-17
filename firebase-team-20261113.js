@@ -4,13 +4,12 @@ import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmai
 import {getFirestore,collection,doc,getDoc,getDocs,onSnapshot,writeBatch,setDoc,serverTimestamp,query,where} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
 
 const firebaseConfig = {
- apiKey:"AIzaSyCXtS-9hwvCb4c3NIOaSEkHUNejdGQHimA",
- authDomain:"eureka-research-program.firebaseapp.com",
- projectId:"eureka-research-program",
- storageBucket:"eureka-research-program.firebasestorage.app",
- messagingSenderId:"461187144553",
- appId:"1:461187144553:web:b2536e34b0328987b17bf8",
- measurementId:"G-H3EWS0Y2QN"
+ apiKey:"AIzaSyDvznaucP4wjG70pqo_lJLMfs4OPM1PUsE",
+ authDomain:"eureka-research-test.firebaseapp.com",
+ projectId:"eureka-research-test",
+ storageBucket:"eureka-research-test.firebasestorage.app",
+ messagingSenderId:"118967907122",
+ appId:"1:118967907122:web:a76478464cb19312145d2b"
 };
 const app=initializeApp(firebaseConfig);
 const auth=getAuth(app),store=getFirestore(app);
