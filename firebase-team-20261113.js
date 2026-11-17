@@ -295,6 +295,33 @@ function selectGsrShared(id){
  },e=>{gsrShared.notice='원시값 조회 실패: '+friendly(e);refreshGsrShared()});
  refreshGsrShared();
 }
+// Pending cloud uploads are recorded locally and retried after reconnection.
+const PENDING_GSR_KEY='yurif_adc_pending_cloud_v2';
+const pendingGsr=()=>{
+ try{return JSON.parse(localStorage.getItem(PENDING_GSR_KEY)||'[]').filter(x=>typeof x==='string')}catch{return []}
+};
+function storePendingGsr(ids){
+ try{localStorage.setItem(PENDING_GSR_KEY,JSON.stringify([...new Set(ids)]))}catch(e){console.warn('원시 ADC 재전송 목록 저장 실패',e)}
+}
+function queuePendingGsr(id){if(!id)return;storePendingGsr([...pendingGsr(),String(id)])}
+function clearPendingGsr(id){storePendingGsr(pendingGsr().filter(x=>x!==String(id)))}
+let retryingGsr=false;
+async function retryPendingGsr(){
+ if(retryingGsr||!state.ready||!navigator.onLine)return;
+ retryingGsr=true;
+ try{
+  for(const id of pendingGsr()){
+   const run=window.yurifFindGsrRun?.(id);
+   if(!run?.gsrSamples?.length)continue;
+   try{
+    await uploadGsrRun(run);
+    await verifyFullGsrRun(run);
+    clearPendingGsr(id);
+   }catch(e){console.warn('원시 ADC 재전송 실패:',id,e?.message||e);break}
+  }
+ }finally{retryingGsr=false}
+}
+window.addEventListener('online',()=>retryPendingGsr().catch(()=>{}));
 function activateGsrSharing(){
  if(gsrShared.offRuns)return;
  gsrShared.offRuns=onSnapshot(gsrIndex,snapshot=>{
@@ -303,6 +330,7 @@ function activateGsrSharing(){
  },e=>{gsrShared.notice='공유 실험 목록 조회 실패: '+friendly(e);refreshGsrShared()});
  gsrShared.interval=setInterval(()=>{
   if(!state.ready||!auth.currentUser)return;
+  retryPendingGsr().catch(()=>{});
   const run=window.yurifGetActiveGsrRun?.();
   if(run?.startedAt&&!run.endedAt&&Array.isArray(run.gsrSamples)&&run.gsrSamples.length)uploadGsrRun(run).catch(()=>{});
  },8000);
@@ -369,6 +397,10 @@ async function verifyFullGsrRun(run){
  return {verified:true,count:readCount,chunks:n,checkedAt:Date.now()};
 }
 window.yurifGsrSharing={
+ queuePending:queuePendingGsr,
+ clearPending:clearPendingGsr,
+ retryPending:retryPendingGsr,
+ pending:pendingGsr,
  verifyFull:verifyFullGsrRun,
  upload:uploadGsrRun,
  status:id=>gsrShared.verified.get(id)||null
