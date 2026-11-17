@@ -8,6 +8,7 @@ export function installYurifV2({auth,store}){
  const randomHex=n=>Array.from(crypto.getRandomValues(new Uint8Array(n)),b=>b.toString(16).padStart(2,'0')).join('');
  const plans=collection(store,'experimentsV2');
  const refProgress=key=>doc(store,'experimentProgress',key);
+ const refPresence=key=>doc(store,'participantPresenceV2',key);
  const refAnswers=key=>collection(store,'participantAnswersV2',key,'items');
  const refAnswer=(key,slot)=>doc(store,'participantAnswersV2',key,'items',slot);
  const state={list:[],selected:'',progress:null,answers:new Map(),offPlans:null,offProgress:null,offAnswers:null,
@@ -199,6 +200,11 @@ export function installYurifV2({auth,store}){
    await getDocFromServer(refAnswer(plan.accessKey,slot)).then(s=>{if(!s.exists())throw Error('설문 서버 확인 실패')});
   }
   if(kind==='baseline'){
+   const consent=await getDocFromServer(doc(store,'participantConsents',plan.accessKey));
+   if(!consent.exists()||consent.data().agreed!==true)throw Error('참가자의 사전 동의가 확인되지 않았습니다.');
+   const presence=await getDocFromServer(refPresence(plan.accessKey));
+   if(!presence.exists()||presence.data().ready!==true||presence.data().uid!==consent.data().uid)
+    throw Error('참가자 화면의 "실험 시작하기" 준비 완료가 확인되지 않았습니다.');
    await window.yurifV2PrepareLab?.(plan,P().makeSegments(plan.order));
   }
   if(kind==='stimulus'&&(!plan.audioQuestion||plan.audioOptions?.length!==5)&&nextPos>=8)throw Error('청각 설문 문항이 미확정입니다. 실험 설계에서 먼저 등록해야 합니다.');
@@ -335,7 +341,7 @@ export function installYurifV2({auth,store}){
  function renderParticipant({key,plan}){
   if(state.participantKey!==key){
    stopParticipant();state.participantKey=key;state.participantPlan=plan;
-   state.participantReady=sessionStorage.getItem('yurif_v2_ready_'+key)==='yes';
+   state.participantReady=false;
    state.offParticipantPlan=onSnapshot(doc(store,'participantAccess',key),snap=>{
     if(!snap.exists()||snap.data().active!==true){$('participant-steps').textContent='참가자 입장 코드가 비활성화되었습니다.';return}
     state.participantPlan=snap.data();updateParticipant();
@@ -388,8 +394,16 @@ export function installYurifV2({auth,store}){
   }
   return open+body+'<button type="submit" class="btn" '+((!plan.audioQuestion||plan.audioOptions?.length!==5)&&slot.startsWith('auditory')?'disabled':'')+'>설문 제출</button></form></section>';
  }
- document.addEventListener('click',e=>{
-  if(e.target.id==='v2-participant-ready'){state.participantReady=true;sessionStorage.setItem('yurif_v2_ready_'+state.participantKey,'yes');updateParticipant()}
+ document.addEventListener('click',async e=>{
+  if(e.target.id!=='v2-participant-ready')return;
+  const btn=e.target;btn.disabled=true;
+  try{
+   const key=state.participantKey,uid=auth.currentUser.uid;
+   await setDoc(refPresence(key),{uid,ready:true,readyAt:serverTimestamp()});
+   const read=await getDocFromServer(refPresence(key));
+   if(!read.exists()||read.data().uid!==uid||read.data().ready!==true)throw Error('준비 상태 서버 확인 실패');
+   state.participantReady=true;updateParticipant();
+  }catch(err){alert('실험 준비 상태 저장 실패: '+String(err.message||err));btn.disabled=false}
  });
  document.addEventListener('submit',async e=>{
   if(e.target.id!=='v2-survey-form')return;e.preventDefault();
