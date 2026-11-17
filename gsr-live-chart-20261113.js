@@ -105,12 +105,13 @@ function gsrReceive(adc){
    d.gsrSamples??=[];
    if(d.gsrSamples.length>=60000){gsrDevice.status='기록 상한 60,000개 도달: 측정 중지·원시 CSV 백업이 필요합니다.';return}
    const active=d.steps.find(x=>x.startedAt&&!x.endedAt);
-   const phase=active?.type|| (active?.name?.includes('휴식')?'rest':active?'stimulus':'gap');
+   const valid=active&&(!d.v2||now<active.startedAt+Number(active.target||0)*1000);
+   const phase=valid?(active.type|| (active.name?.includes('휴식')?'rest':'stimulus')):'gap';
    // The safety journal includes gap samples, not just active segments.
    // The old [timestamp,ADC] array remains unchanged for compatibility with archives and Firestore.
    const seq=d.gsrSamples.length;
-   d.gsrSamples.push([now,adc]);
-   window.yurifSafeAdc?.record(d.id,seq,now,adc,phase,active?.label||'');
+   d.gsrSamples.push([now,adc,phase,valid?active?.label||'':'']);
+   window.yurifSafeAdc?.record(d.id,seq,now,adc,phase,valid?active?.label||'':'');
    if(now-gsrDevice.lastPersist>2500){gsrDevice.lastPersist=now;labSaveDraft()}
  }
 }
@@ -135,6 +136,7 @@ async function gsrReadLoop(port){
  finally{
   if(gsrDevice.reader){try{gsrDevice.reader.releaseLock()}catch(e){}}
   gsrDevice.reader=null;gsrDevice.connected=false;
+  if(labDraft?.v2&&labDraft.startedAt&&!labDraft.endedAt)window.yurifV2OnSensorLost?.();
   if(labDraft&&labDraft.gsrSamples){labSaveDraft();window.yurifSafeAdc?.flush().catch(()=>{});}
   if(!gsrDevice.stopping&&gsrDevice.status==='USB 연결됨')gsrDevice.status='USB 연결 종료';
   gsrRefresh();
@@ -162,8 +164,8 @@ async function gsrDisconnect(){
 function gsrExportCsv(run){
  const pts=gsrSamples(run);if(!pts.length)return alert('저장된 ADC 데이터가 없습니다.');
  const lines=['timestamp_ms,iso_datetime,elapsed_seconds,segment,environment,adc_raw'];
- for(const [t,v] of pts){const s=run.steps.find(x=>x.startedAt&&t>=x.startedAt&&t<=(x.endedAt||run.endedAt||Infinity));const csv=x=>'"'+String(x??'').replaceAll('"','""')+'"';
-  lines.push([t,new Date(t).toISOString(),((t-run.startedAt)/1000).toFixed(3),csv(s?.label||''),csv(s?.envName||s?.name||''),v].join(','));
+ for(const [t,v,phase,label] of pts){const s=run.steps.find(x=>x.startedAt&&t>=x.startedAt&&t<=(x.endedAt||run.endedAt||Infinity));const csv=x=>'"'+String(x??'').replaceAll('"','""')+'"';
+  lines.push([t,new Date(t).toISOString(),((t-run.startedAt)/1000).toFixed(3),csv(phase==='gap'?'구간 외':label||s?.label||''),csv(phase==='gap'?'구간 외':s?.envName||s?.name||''),v].join(','));
  }
  download('yurif-gsr-'+run.mode+'-'+run.code+'-'+run.date+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
 }
