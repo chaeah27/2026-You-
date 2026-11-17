@@ -288,6 +288,8 @@ export function installYurifV2({auth,store}){
   if(!confirm('등록된 실험의 청각 설문만 수정할까요? 감각 환경 순서는 변경되지 않습니다.'))return;
   const button=form.querySelector('button[type=submit]');button.disabled=true;
   try{
+   const progress=await getDocFromServer(refProgress(plan.accessKey));
+   if(!progress.exists()||progress.data().phase!=='registered')throw Error('실험 시작 이후에는 설문 문항을 수정할 수 없습니다.');
    const batch=writeBatch(store);
    batch.update(doc(plans,plan.id),{audioQuestion:question,audioOptions:options});
    batch.update(doc(store,'participantAccess',plan.accessKey),{audioQuestion:question,audioOptions:options});
