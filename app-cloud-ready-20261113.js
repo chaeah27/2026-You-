@@ -553,9 +553,11 @@ async function labFinish(){
   alert('로컬 저장 확인 완료 ('+samples.length+'개). Firebase 원시값 공유 기능에 연결하지 못했습니다. 원시 CSV를 별도로 보존해 주세요.');
   return;
  }
+ window.yurifGsrSharing.queuePending?.(finished.id);
  window.yurifGsrSharing.upload(finished).then(async result=>{
   const full=await window.yurifGsrSharing.verifyFull(finished);
   if(!full.verified||full.count!==result.count)throw Error('서버 전수 검증 실패');
+  window.yurifGsrSharing.clearPending?.(finished.id);
   if(lastLabSaveCheck?.id===finished.id)recordLabSaveCheck({...lastLabSaveCheck,cloud:'verified',cloudCount:full.count});
  }).catch(err=>{
   if(lastLabSaveCheck?.id===finished.id)recordLabSaveCheck({...lastLabSaveCheck,cloud:'failed'});
