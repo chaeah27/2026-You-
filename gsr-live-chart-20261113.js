@@ -144,6 +144,7 @@ async function gsrReadLoop(port){
 }
 async function gsrConnect(){
  if(gsrDevice.connected)return;
+ if(labDraft?.v2&&window.yurifV2RecoveryReady===false){alert('ADC 독립 기록 복구가 끝난 후 센서를 연결해 주세요.');return}
  if(!('serial' in navigator)||!window.isSecureContext){alert('HTTPS 기반 Chrome 또는 Edge 데스크톱 브라우저가 필요합니다.');return}
  let port;
  try{
