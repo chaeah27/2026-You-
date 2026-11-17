@@ -108,7 +108,7 @@ onAuthStateChanged(auth,async user=>{
 
 async function loadWorkspace(){
  if(window.yurifCloudGetData){for(const type of types)window.yurifCloudApply(type,window.yurifCloud.initialData[type]||[]);return;}
- for(const src of ['app-cloud-ready-20261113.js?v=participant-team-complete-20261117','gsr-live-chart-20261113.js']){
+ for(const src of ['adc-safety-journal-v2.js?v=1','app-cloud-ready-20261113.js?v=participant-team-complete-20261117','gsr-live-chart-20261113.js']){
   await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error(src+' 파일을 불러오지 못했습니다'));document.body.append(s)});
  }
 }
