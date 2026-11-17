@@ -531,9 +531,9 @@ function participantAdminHtml(){
  '<section class="panel"><div class="entry-head"><div><h2>참가자별 설문 및 생리 측정 결과</h2><p class="muted">설문과 같은 참가자 코드의 GSR 기록을 함께 확인합니다. 구간 매칭은 환경명·시각을 검토해야 합니다.</p></div><button type="button" class="btn secondary" id="participant-admin-refresh">목록 새로고침</button></div>'+
  '<div id="participant-admin-list">'+(participantState.adminPlans.length?participantState.adminPlans.map(p=>
   '<div class="lab-archive-item"><strong>'+shortText(p.code)+'</strong> · '+(p.stage==='stage1'?'1차':'2차')+' · '+(p.order||[]).length+'개 조건'+
-  '<p class="muted">입장 코드: <code>'+shortText(p.key)+'</code></p>'+
+  '<p class="muted">상태: '+(p.active?'활성':'접근 중지')+'</p><p class="muted">입장 코드: <code>'+shortText(p.key)+'</code></p>'+
   '<div class="actions"><button type="button" class="btn secondary" data-participant-copy="'+shortText(p.key)+'">입장 코드 복사</button>'+
-  '<button type="button" class="btn secondary" data-participant-results="'+shortText(p.key)+'">동의·응답·GSR 조회</button></div></div>').join(''):'<p class="muted">등록된 참가자가 없거나 아직 목록을 불러오지 못했습니다.</p>')+'</div>'+
+  '<button type="button" class="btn secondary" data-participant-results="'+shortText(p.key)+'">동의·응답·GSR 조회</button>'+(state.member?.role==='admin'&&p.active?'<button type="button" class="btn secondary" data-participant-deactivate="'+shortText(p.key)+'">참가 코드 사용 중지</button>':'')+'</div></div>').join(''):'<p class="muted">등록된 참가자가 없거나 아직 목록을 불러오지 못했습니다.</p>')+'</div>'+
  '<div id="participant-admin-results">'+(participantState.adminRows||[]).join('')+'</div></section>';
 }
 window.yurifParticipantAdminHtml=participantAdminHtml;
@@ -613,10 +613,11 @@ async function participantAdminRead(key,elementId='participant-admin-results'){
    '<div class="tablewrap"><table><thead><tr><th>구간 · 환경</th><th>설문 저장</th><th>쾌·불쾌</th><th>각성</th><th>대인 호감</th><th>GSR ADC</th></tr></thead><tbody>'+
    slots.map(slot=>{
     const answer=answers.get(slot.slot);
-    const matched=physiology.find(p=>p.name===slot.env)||null;
+    const candidates=physiology.filter(p=>p.name===slot.env);
+    const matched=candidates.length===1?candidates[0]:null;
     return '<tr><td>'+shortText(slot.title)+'</td><td>'+(answer?'완료':'미응답')+'</td><td>'+(answer?answer.valence:'—')+
      '</td><td>'+(answer?answer.arousal:'—')+'</td><td>'+(answer&&answer.liking!==''?answer.liking:'—')+'</td>'+
-     '<td>'+(matched?'평균 '+matched.mean+' · '+matched.count+'개 (최소 '+matched.min+', 최대 '+matched.max+')':'동일 환경명으로 자동 매칭되지 않음')+'</td></tr>';
+     '<td>'+(matched?'평균 '+matched.mean+' · '+matched.count+'개 (최소 '+matched.min+', 최대 '+matched.max+')':(candidates.length>1?'동일 환경의 측정 구간이 여러 개여서 수동 확인 필요':'동일 환경명으로 자동 매칭되지 않음'))+'</td></tr>';
    }).join('')+'</tbody></table></div>'+
    '<p class="muted">GSR 수치는 보정 전 ADC이며, 같은 참가자 코드와 정확히 일치하는 환경명만 자동 연결합니다. 실험 구간 시각과 설문 응답 시각을 별도로 확인하세요. 맞지 않으면 임의로 합치지 않습니다.</p>'+
    (physiology.length?'<p class="muted">연결된 GSR 구간: '+physiology.map(p=>shortText(p.label)+' '+shortText(p.name)+'(평균 '+p.mean+')').join(', ')+'</p>':'')+
@@ -628,6 +629,16 @@ document.addEventListener('click',async e=>{
  if(e.target?.id==='participant-admin-refresh'){await refreshParticipantAdmin();return}
  const copy=e.target?.closest('[data-participant-copy]');
  if(copy){try{await navigator.clipboard.writeText(copy.dataset.participantCopy);alert('입장 코드 복사 완료')}catch{alert('입장 코드: '+copy.dataset.participantCopy)}return}
+ const deactivate=e.target?.closest('[data-participant-deactivate]');
+ if(deactivate&&state.member?.role==='admin'){
+  const key=deactivate.dataset.participantDeactivate;
+  if(!confirm('이 참가자의 입장 코드를 비활성화할까요? 이미 저장된 동의·설문 데이터는 삭제되지 않습니다.'))return;
+  try{const p=participantState.adminPlans.find(x=>x.key===key);if(!p)return;
+   await setDoc(participantPlanRef(key),{code:p.code,stage:p.stage,order:p.order,consentText:p.consentText,active:false,valenceQuestion:p.valenceQuestion||'',arousalQuestion:p.arousalQuestion||'',likingQuestion:p.likingQuestion||'',createdAt:p.createdAt||serverTimestamp()});
+   await refreshParticipantAdmin();alert('입장 코드 사용을 중지했습니다.');
+  }catch(ex){alert('참가 코드 비활성화 실패: '+friendly(ex))}
+  return;
+ }
  const result=e.target?.closest('[data-participant-results]');
  if(result){await participantAdminRead(result.dataset.participantResults)}
 });
