@@ -112,6 +112,10 @@ service cloud.firestore {
     && request.resource.data.stage == resource.data.stage;
    allow delete: if false;
   }
+  match /experimentsV2/{experimentId}/heartRate/{segmentId}{
+   allow get, list, create, update: if isMember();
+   allow delete: if false;
+  }
   match /experimentsV2/{experimentId}/audit/{auditId}{
    allow get, list, create: if isMember();
    allow update, delete: if false;
