@@ -20,6 +20,8 @@ export function installYurifV2({auth,store}){
   if(state.offPlans)return;
   state.offPlans=onSnapshot(plans,s=>{
    state.list=s.docs.map(d=>({id:d.id,...d.data()})).sort((a,b)=>String(b.createdAt?.seconds||'').localeCompare(String(a.createdAt?.seconds||'')));
+   const resume=window.yurifV2ActiveRunId?.();
+   if(resume&&resume!==state.selected&&state.list.some(p=>p.id===resume))selectExperiment(resume);
    refreshRegistration();refreshLab();
   },e=>{state.warning='예정 실험 조회 불가: '+e.message;refreshRegistration();refreshLab()});
  }
