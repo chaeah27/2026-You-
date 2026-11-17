@@ -446,6 +446,47 @@ export function installYurifV2({auth,store}){
   }
   return html;
  }
+ function drawSummaryCanvas(rows,metrics){
+  const canvas=$('v2-summary-chart');if(!canvas)return;
+  const width=Math.max(560,Math.round(canvas.getBoundingClientRect().width||840)),height=330;
+  const dpr=Math.min(devicePixelRatio||1,2);
+  canvas.width=width*dpr;canvas.height=height*dpr;canvas.style.height=height+'px';
+  const ctx=canvas.getContext('2d');if(!ctx)return;
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.fillStyle='#FAFCFE';ctx.fillRect(0,0,width,height);
+  const groups=[
+   {name:'ADC 원시값 (0~1023)',keys:['adcMean','adcMin','adcMax'],max:1023,color:'#2875A8'},
+   {name:'심박수 (bpm)',keys:['hrMean','hrMin','hrMax'],max:250,color:'#B57643'}
+  ];
+  const usable=groups.map(g=>({...g,keys:g.keys.filter(k=>metrics.includes(k))})).filter(g=>g.keys.length);
+  if(!rows.length||!usable.length){
+   ctx.fillStyle='#586F80';ctx.font='14px system-ui';ctx.fillText('표시할 수치가 없습니다. 지표를 선택하세요.',16,45);return;
+  }
+  let top=22;const padLeft=42,right=14,chartW=width-padLeft-right,sectionH=Math.floor((height-25)/usable.length);
+  usable.forEach(g=>{
+   const plotY=top+24,plotH=Math.max(45,sectionH-63),unitW=chartW/rows.length;
+   ctx.fillStyle='#334F61';ctx.font='bold 13px system-ui';ctx.textAlign='left';ctx.fillText(g.name,8,top+8);
+   ctx.strokeStyle='#C9D9E3';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(padLeft,plotY+plotH);ctx.lineTo(width-right,plotY+plotH);ctx.stroke();
+   rows.forEach((row,i)=>{
+    const itemW=Math.max(2,unitW/(g.keys.length+1)),start=padLeft+i*unitW;
+    g.keys.forEach((key,k)=>{
+     const val=Number(row[key]);if(row[key]===''||!Number.isFinite(val))return;
+     const bh=Math.max(1,Math.min(plotH,plotH*val/g.max));
+     ctx.fillStyle=g.color;ctx.globalAlpha=0.45+0.5*(k+1)/g.keys.length;
+     ctx.fillRect(start+4+k*itemW,plotY+plotH-bh,Math.max(2,itemW-2),bh);
+     ctx.globalAlpha=1;
+    });
+    if(unitW>=26){
+     const short=String(row.environment||'').slice(0,4);
+     ctx.fillStyle='#587083';ctx.font='10px system-ui';ctx.textAlign='center';
+     ctx.fillText(short,start+unitW/2,plotY+plotH+15);
+    }
+   });
+   ctx.fillStyle='#728A9A';ctx.font='10px system-ui';ctx.textAlign='right';
+   ctx.fillText(String(g.max),padLeft-5,plotY+3);ctx.fillText('0',padLeft-5,plotY+plotH+3);
+   top+=sectionH;
+  });
+ }
  function chosenChecked(css){return new Set([...document.querySelectorAll(css+':checked')].map(x=>x.value))}
  function analysisRows(){
   const plan=selectedSessionPlan();if(!plan)return [];
@@ -485,9 +526,11 @@ export function installYurifV2({auth,store}){
   const metrics=[...document.querySelectorAll('.v2-metric:checked')].map(x=>x.value);
   const headers=[['environment','환경 / 구간'],['kind','구간 유형'],['samples','ADC 샘플 수'],...measurements.filter(([id])=>metrics.includes(id))];
   const rows=analysisRows();
-  root.innerHTML='<div class="tablewrap"><table><thead><tr>'+headers.map(x=>'<th>'+esc(x[1])+'</th>').join('')+'</tr></thead><tbody>'+
+  root.innerHTML='<div style="overflow-x:auto"><canvas id="v2-summary-chart" role="img" aria-label="선택한 ADC와 심박수의 구간별 비교 그래프" style="width:100%;min-height:300px"></canvas></div>'+ 
+    '<div class="tablewrap"><table><thead><tr>'+headers.map(x=>'<th>'+esc(x[1])+'</th>').join('')+'</tr></thead><tbody>'+
    rows.map(row=>'<tr>'+headers.map(([key])=>'<td>'+esc(row[key]??'')+'</td>').join('')+'</tr>').join('')+
    '</tbody></table></div>'+(rows.length?'':'<p class="muted">선택된 조건에 해당하는 구간 자료가 없습니다.</p>');
+  drawSummaryCanvas(rows,metrics);
  }
  async function loadSession(id){
   session.planId=id;session.run=null;session.points=[];session.answers=new Map();session.heart=new Map();session.error='';
