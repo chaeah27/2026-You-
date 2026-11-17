@@ -401,5 +401,168 @@ export function installYurifV2({auth,store}){
    state.participantAnswers.set(slot,confirmed.data());updateParticipant();
   }catch(err){alert('설문 저장 실패: '+String(err.message||err));btn.disabled=false}
  });
- window.yurifV2={activateResearch,deactivateResearch,registrationHtml,labHtml,renderParticipant,stopParticipant,state,selectExperiment};
+ /* v2 session review: read raw ADC from Firebase, never from overwritten participant labels. */
+ const session={planId:'',run:null,points:[],answers:new Map(),heart:new Map(),error:''};
+ const CHUNK_COL=collection(store,'teamData','gsrRawChunks','items');
+ const indexRef=id=>doc(store,'teamData','gsrRunIndex','items',id);
+ function selectedSessionPlan(){return state.list.find(p=>p.id===session.planId)}
+ function sessionHtml(){
+  return '<section class="panel"><h2>확정 1차 실험 통합 세션 · v2</h2>'+
+   '<p class="muted">등록 실험 ID를 기준으로 ADC 구간, 설문 7회와 추후 입력한 구간별 심박수를 연결합니다. 보정 전 ADC 원시값입니다.</p>'+
+   '<div class="formgrid"><div class="field"><label>참가자 · 실험 선택</label><select id="v2-session-select"><option value="">선택</option>'+
+   state.list.map(p=>'<option value="'+esc(p.id)+'" '+(session.planId===p.id?'selected':'')+'>'+esc(p.code)+' · '+esc(p.scheduledAt)+'</option>').join('')+
+   '</select></div><div class="field"><label>분석할 감각 분야</label><select id="v2-sensory-filter"><option value="all">모두</option><option value="visual">시각</option><option value="olfactory">후각</option><option value="auditory">청각</option></select></div></div>'+
+   '<div class="actions"><button class="btn secondary" type="button" id="v2-session-load">서버 기록 조회·대조</button></div>'+
+   '<div id="v2-session-output">'+sessionOutput()+'</div></section>';
+ }
+ const selectedOptions=[
+  ['baseline','초기 안정 상태'],['stimulus','감각 환경'],['rest','30초 휴식'],['gap','구간 외 ADC']
+ ];
+ const measurements=[
+  ['adcMean','ADC 평균'],['adcMin','ADC 최저'],['adcMax','ADC 최고'],
+  ['hrMean','심박수 평균'],['hrMin','심박수 최저'],['hrMax','심박수 최고'],['survey','설문 결과']
+ ];
+ function sessionOutput(){
+  if(session.error)return '<p role="alert">'+esc(session.error)+'</p>';
+  const plan=selectedSessionPlan();if(!plan)return '<p class="muted">실험을 선택하고 조회해 주세요.</p>';
+  const run=session.run;const segments=run?.steps||[];
+  let html='<p><strong>'+esc(plan.code)+' · '+esc(plan.researcherCode)+'</strong> · '+esc(plan.scheduledAt)+'</p>'+
+   '<p>ADC 원시 샘플 '+session.points.length+'개 · 측정 구간 '+segments.length+'개 · 설문 '+session.answers.size+'/7개</p>';
+  html+='<div class="field"><label>분석에 포함할 구간</label><div class="actions">'+selectedOptions.map(([v,label])=>
+   '<label><input type="checkbox" class="v2-include" value="'+v+'" '+(v==='gap'?'':'checked')+'> '+label+'</label>').join('')+'</div></div>'+
+   '<div class="field"><label>표·CSV에 표시할 지표</label><div class="actions">'+measurements.map(([v,label])=>
+   '<label><input type="checkbox" class="v2-metric" value="'+v+'" '+(['adcMean','hrMean','survey'].includes(v)?'checked':'')+'> '+label+'</label>').join('')+'</div></div>'+
+   '<div id="v2-analysis-table"></div><div class="actions"><button type="button" class="btn secondary" id="v2-session-csv">선택 항목 CSV 다운로드</button></div>';
+  if(segments.length){
+   html+='<details><summary>Apple Watch 구간별 심박수 수동 입력 · 기록 이후 입력 가능</summary>'+
+    '<form id="v2-heart-form"><div class="field"><label>측정 구간</label><select name="stepId" required>'+
+    segments.map((step,i)=>'<option value="'+i+'">'+esc(step.name)+' · '+esc(step.label)+'</option>').join('')+'</select></div>'+
+    '<div class="formgrid">'+[['mean','평균 심박수 (bpm)'],['min','최저 심박수 (bpm)'],['max','최고 심박수 (bpm)']].map(([k,label])=>
+     '<div class="field"><label>'+label+'</label><input name="'+k+'" type="number" min="0" max="250" step="0.1"></div>').join('')+'</div>'+
+    '<div class="field"><label>심박수 앱 기록·특이사항 메모</label><textarea name="note" maxlength="1000"></textarea></div>'+
+    '<button type="submit" class="btn secondary">선택한 구간의 심박수 저장</button></form>'+
+    '<p class="muted">이미지 첨부는 Firebase Storage 접근 규칙과 업로드 검증을 별도로 완성한 후 활성화할 예정입니다. 값이 없는 구간은 추측해서 채우지 마세요.</p></details>';
+  }
+  return html;
+ }
+ function chosenChecked(css){return new Set([...document.querySelectorAll(css+':checked')].map(x=>x.value))}
+ function analysisRows(){
+  const plan=selectedSessionPlan();if(!plan)return [];
+  const types=chosenChecked('.v2-include'),metrics=chosenChecked('.v2-metric'),filter=$('v2-sensory-filter')?.value||'all';
+  const steps=session.run?.steps||[];
+  const rows=[];
+  for(let i=0;i<steps.length;i++){
+   const step=steps[i];const kind=i===0?'baseline':i%2?'stimulus':'rest';
+   if(!types.has(kind))continue;
+   const pos=i===0?-1:Math.floor((i-1)/2);
+   const env=pos<0?null:plan.order[pos];
+   if(filter!=='all'&&env?.type!==filter)continue;
+   const pts=session.points.filter(p=>Array.isArray(p)&&p[0]>=step.startedAt&&p[0]<(step.endedAt||Infinity)&&p[2]!=='gap');
+   const values=pts.map(p=>p[1]).filter(Number.isFinite);
+   const heart=session.heart.get(String(i))||{};
+   const rating=pos>=0&&kind==='stimulus'?session.answers.get(P().surveySlot(pos)):null;
+   const detail=rating?(rating.rating!=null?String(rating.rating):'순위: '+(rating.ranking||[]).join(' > ')):'';
+   rows.push({kind,category:env?.type||'baseline',environment:step.name,segmentId:i,
+    start:step.startedAt||'',end:step.endedAt||'',samples:values.length,
+    adcMean:values.length?(values.reduce((a,b)=>a+b,0)/values.length).toFixed(2):'',
+    adcMin:values.length?Math.min(...values):'',adcMax:values.length?Math.max(...values):'',
+    hrMean:heart.mean??'',hrMin:heart.min??'',hrMax:heart.max??'',survey:detail});
+  }
+  if(types.has('gap')){
+   const points=session.points.filter(p=>p[2]==='gap');
+   if(points.length&&filter==='all'){
+    const values=points.map(x=>x[1]);
+    rows.push({kind:'gap',category:'gap',environment:'구간 외 ADC',segmentId:'',start:points[0][0],end:points.at(-1)[0],
+     samples:points.length,adcMean:(values.reduce((a,b)=>a+b,0)/values.length).toFixed(2),
+     adcMin:Math.min(...values),adcMax:Math.max(...values),hrMean:'',hrMin:'',hrMax:'',survey:''});
+   }
+  }
+  return rows;
+ }
+ function drawSessionTable(){
+  const root=$('v2-analysis-table');if(!root)return;
+  const metrics=[...document.querySelectorAll('.v2-metric:checked')].map(x=>x.value);
+  const headers=[['environment','환경 / 구간'],['kind','구간 유형'],['samples','ADC 샘플 수'],...measurements.filter(([id])=>metrics.includes(id))];
+  const rows=analysisRows();
+  root.innerHTML='<div class="tablewrap"><table><thead><tr>'+headers.map(x=>'<th>'+esc(x[1])+'</th>').join('')+'</tr></thead><tbody>'+
+   rows.map(row=>'<tr>'+headers.map(([key])=>'<td>'+esc(row[key]??'')+'</td>').join('')+'</tr>').join('')+
+   '</tbody></table></div>'+(rows.length?'':'<p class="muted">선택된 조건에 해당하는 구간 자료가 없습니다.</p>');
+ }
+ async function loadSession(id){
+  session.planId=id;session.run=null;session.points=[];session.answers=new Map();session.heart=new Map();session.error='';
+  const plan=selectedSessionPlan();if(!plan){session.error='실험 선택이 필요합니다.';return}
+  try{
+   const [meta,chunks,answers]=await Promise.all([
+    getDocFromServer(indexRef(id)),
+    getDocs(query(CHUNK_COL,where('runId','==',id))),
+    getDocs(refAnswers(plan.accessKey))
+   ]);
+   const local=window.yurifFindGsrRun?.(id);
+   session.run=meta.exists()?meta.data():local||null;
+   session.points=chunks.docs.sort((a,b)=>(a.data().index||0)-(b.data().index||0))
+    .flatMap(d=>Array.isArray(d.data().points)?d.data().points:[]);
+   if(!session.points.length&&local?.gsrSamples?.length)session.points=local.gsrSamples;
+   session.answers=new Map(answers.docs.map(x=>[x.id,x.data()]));
+   if(session.run?.steps){
+    for(let i=0;i<session.run.steps.length;i++){
+     const snap=await getDoc(doc(store,'experimentsV2',id,'heartRate',String(i)));
+     if(snap.exists())session.heart.set(String(i),snap.data());
+    }
+   }
+   if(session.run?.sampleCount&&session.points.length!==session.run.sampleCount)
+    session.error='경고: 서버 인덱스와 로드한 ADC 샘플 수가 다릅니다. 원본을 확인해야 합니다.';
+  }catch(err){session.error='세션 조회 실패: '+String(err.message||err)}
+ }
+ async function saveHeart(form){
+  const plan=selectedSessionPlan();if(!plan||!session.run)throw Error('먼저 측정 기록을 불러와 주세요.');
+  const data=Object.fromEntries(new FormData(form)),key=String(data.stepId);
+  const out={updatedAt:serverTimestamp(),note:String(data.note||'').slice(0,1000)};
+  for(const k of ['mean','min','max']){
+   if(data[k]!==''&&data[k]!=null){
+    const v=Number(data[k]);if(!Number.isFinite(v)||v<0||v>250)throw Error('심박수는 0~250 범위로 입력해 주세요.');
+    out[k]=v;
+   }else out[k]=null;
+  }
+  if(out.min!=null&&out.max!=null&&out.min>out.max)throw Error('최저 심박수가 최고 심박수보다 클 수 없습니다.');
+  if(out.mean!=null&&out.min!=null&&out.mean<out.min)throw Error('평균 심박수가 최저보다 작습니다.');
+  if(out.mean!=null&&out.max!=null&&out.mean>out.max)throw Error('평균 심박수가 최고보다 큽니다.');
+  const ref=doc(store,'experimentsV2',plan.id,'heartRate',key);
+  await setDoc(ref,out);
+  const verified=await getDocFromServer(ref);
+  if(!verified.exists())throw Error('심박수 저장 확인 실패');
+  session.heart.set(key,verified.data());
+  return true;
+ }
+ function exportSessionCsv(){
+  const metrics=chosenChecked('.v2-metric'),plan=selectedSessionPlan();
+  if(!plan)return;
+  const cols=['environment','kind','category','start','end','samples',...measurements.map(x=>x[0]).filter(x=>metrics.has(x))];
+  const escCsv=x=>'"'+String(x??'').replaceAll('"','""')+'"';
+  const csv=['participant_code,experiment_id,'+cols.join(','),
+   ...analysisRows().map(row=>[plan.code,plan.id,...cols.map(c=>row[c])].map(escCsv).join(','))].join('\r\n');
+  const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);
+  const a=document.createElement('a');a.href=url;a.download='yurif-session-'+plan.code+'-'+plan.id+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+ }
+ document.addEventListener('click',async e=>{
+  if(e.target.id==='v2-session-load'){
+   const id=$('v2-session-select')?.value||'';if(!id)return alert('실험을 먼저 선택하세요.');
+   const button=e.target;button.disabled=true;
+   await loadSession(id);
+   const out=$('v2-session-output');if(out)out.innerHTML=sessionOutput();
+   drawSessionTable();button.disabled=false;
+  }
+  if(e.target.id==='v2-session-csv')exportSessionCsv();
+ });
+ document.addEventListener('change',e=>{
+  if(e.target.matches('.v2-include,.v2-metric')||e.target.id==='v2-sensory-filter')drawSessionTable();
+ });
+ document.addEventListener('submit',async e=>{
+  if(e.target.id!=='v2-heart-form')return;e.preventDefault();
+  const btn=e.target.querySelector('button[type=submit]');btn.disabled=true;
+  try{await saveHeart(e.target);alert('심박수 서버 저장 확인 완료');drawSessionTable()}
+  catch(err){alert('심박수 저장 실패: '+String(err.message||err))}
+  finally{btn.disabled=false}
+ });
+
+ window.yurifV2={activateResearch,deactivateResearch,registrationHtml,labHtml,sessionHtml,renderParticipant,stopParticipant,state,selectExperiment};
 }
