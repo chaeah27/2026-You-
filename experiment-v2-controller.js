@@ -127,7 +127,7 @@ export function installYurifV2({auth,store}){
  function phaseLabel(p){
   return ({registered:'실험 준비',measurement:'측정 중',restReady:'휴식 시작 대기',
    rest:'휴식 측정 중',setup:'다음 환경 준비',survey:'참가자 설문 대기',
-   completed:'완료',aborted:'중단'})[p?.phase]||'실험 상태 확인 중';
+   completed:'완료',aborted:'중단',sensorError:'센서 오류 · 연구원 조치 필요'})[p?.phase]||'실험 상태 확인 중';
  }
  function labHtml(){
   return '<section class="panel" id="v2-lab-root"><h2>확정 1차 실험 · 연구원 진행</h2><p class="muted">등록된 실험의 21개 구간을 사용합니다. 각 휴식은 연구원이 직접 시작합니다. 설문 저장이 확인되기 전에는 다음 환경으로 진행할 수 없습니다.</p>'+
@@ -153,6 +153,7 @@ export function installYurifV2({auth,store}){
    action='<p>자동 종료 예정 · '+seconds+'초 측정 / 시작 '+(p.startedAt?esc(new Date(p.startedAt).toLocaleTimeString('ko-KR')):'—')+'</p>'+
     '<strong id="v2-countdown">남은 시간 계산 중…</strong>';
   }
+  if(kind==='sensorError')action='<p role="alert">측정 중 센서 연결이 끊어졌습니다. 재연결 후 해당 구간을 재측정하거나 실험을 중단하세요. 이전 샘플은 삭제하지 않습니다.</p>'+btn('retry','센서 연결 후 해당 구간 재측정')+btn('abort','실험 중단 · 기록 보존');
   if(kind==='completed')action='<p>측정 기록 종료됨. 저장 상태와 세션 기록을 확인하세요.</p>';
   const last=n>=0?'현재 환경: '+esc(plan.order[n]?.name||''):'초기 안정 상태';
   return '<p><strong>진행 상태: '+esc(phaseLabel(p))+'</strong> · '+last+'</p>'+
@@ -198,9 +199,28 @@ export function installYurifV2({auth,store}){
   await transition(kind==='rest'?'rest':'measurement',expected,{position:nextPos,segment,startedAt,endedAt:null});
   window.yurifV2StepStart?.(plan,segment,startedAt);
  }
+ async function handleSensorFailure(){
+  const p=state.progress,plan=activePlan();
+  if(!p||!plan||!['measurement','rest'].includes(p.phase)||state.transitioning)return;
+  if(window.yurifV2ConnectedSensor?.())return;
+  const at=Date.now();
+  window.yurifV2StepFailure?.(plan,p.segment,at,'USB 연결 끊김');
+  try{await transition('sensorError',p.phase,{failedAt:at,failedSegment:p.segment,failedPhase:p.phase})}
+  catch(err){state.warning='센서 오류 상태 서버 동기화 실패: '+String(err.message||err)}
+ }
+ window.yurifV2OnSensorLost=()=>handleSensorFailure().catch(err=>{state.warning=String(err.message||err);refreshLab()});
+ async function retry(){
+  const p=state.progress,plan=activePlan();if(!p||p.phase!=='sensorError'||!plan)throw Error('재측정 대기 상태가 아닙니다.');
+  if(!window.yurifV2ConnectedSensor?.())throw Error('먼저 Arduino 센서를 다시 연결해 주세요.');
+  const kind=p.failedPhase==='rest'?'rest':'measurement';
+  const start=Date.now();
+  await transition(kind,'sensorError',{startedAt:start,endedAt:null,failedAt:null,failedSegment:null,failedPhase:null});
+  window.yurifV2StepRetry?.(plan,p.segment,start);
+ }
  async function endTimed(){
   const p=state.progress,plan=activePlan();
   if(!p||!plan||!['measurement','rest'].includes(p.phase)||state.transitioning)return;
+  if(!window.yurifV2ConnectedSensor?.()){await handleSensorFailure();return}
   const duration=p.phase==='rest'?30000:60000;
   if(!p.startedAt||Date.now()-p.startedAt<duration)return;
   const stamp=Date.now();
@@ -259,7 +279,7 @@ export function installYurifV2({auth,store}){
   button.disabled=true;
   try{
    const action=button.dataset.v2Lab;
-   if(action==='finish')await finish();else await beginStep(action);
+   if(action==='finish')await finish();else if(action==='retry')await retry();else if(action==='abort')await transition('aborted','sensorError',{abortedAt:Date.now()});else await beginStep(action);
   }catch(err){state.warning=String(err.message||err);alert('진행 불가: '+state.warning);refreshLab()}
   finally{button.disabled=false}
  });
