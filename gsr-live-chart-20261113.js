@@ -23,7 +23,7 @@ function gsrArchiveActions(run){
 function gsrLabPanel(){
  const supported='serial' in navigator && window.isSecureContext;
  const info=supported?'Chrome/Edge 데스크톱에서 Arduino USB 포트를 선택해 연결하세요. Arduino 스케치는 한 줄에 ADC 정수 1개(0~1023)를 9600 baud로 출력해야 합니다.':'이 브라우저에서는 Web Serial이 제공되지 않습니다. HTTPS의 데스크톱 Chrome 또는 Edge를 사용하세요.';
- return '<section class="panel gsr-panel"><div class="entry-head" style="align-items:center;flex-wrap:wrap"><div><h2>Arduino GSR 실시간 측정</h2><p class="muted">Grove GSR → Uno R3 → USB → 유리프 실험실</p></div><span id="gsr-status" class="pill">연결 대기</span></div>'+
+ return '<section class="panel gsr-panel"><div class="entry-head" style="align-items:center;flex-wrap:wrap"><div><h2>Arduino GSR 실시간 측정</h2><p class="muted">Grove GSR → Uno R3 → USB → 유레카 리서치 프로그램 실험실</p></div><span id="gsr-status" class="pill">연결 대기</span></div>'+
  '<div class="gsr-live"><div><small>현재 ADC 원시값</small><strong id="gsr-current">—</strong><small>0~1023 · 전도도(µS) 아님</small></div><div><small>현재 실험 수집 샘플</small><strong id="gsr-count">0</strong><small>구간 시작 후 기록</small></div><div><small>USB 연결 상태</small><strong id="gsr-connection">대기</strong><small>기록은 현재 브라우저에 저장</small></div></div>'+
  '<div class="gsr-chart-box"><div class="gsr-chart-header"><div><h3>Arduino 실시간 ADC 그래프</h3><p class="muted">최근 120초 · 가로축 시간(초), 세로축 ADC(0~1023)</p></div><span class="pill" id="gsr-chart-segment">실험 대기</span></div><canvas id="gsr-live-chart" width="900" height="290" role="img" aria-label="Arduino GSR ADC의 최근 120초 실시간 선 그래프 및 실험 구간 경계"></canvas><div class="gsr-chart-legend"><span><i class="gsr-line-legend"></i>GSR ADC 원시값</span><span><i class="gsr-boundary-legend"></i>구간 변경 시점</span></div><p class="muted">그래프는 측정값을 보여주는 보조 화면이며, 실제 저장은 실험 시작 후 구간별로 이루어집니다.</p></div>'+ 
  '<div class="actions"><button type="button" class="btn" data-gsr-action="connect" '+(supported?'':'disabled')+'>USB 센서 연결</button><button type="button" class="btn secondary" data-gsr-action="disconnect">연결 해제</button></div>'+
@@ -168,7 +168,7 @@ function gsrExportCsv(run){
  for(const [t,v,phase,label] of pts){const s=run.steps.find(x=>x.startedAt&&t>=x.startedAt&&t<=(x.endedAt||run.endedAt||Infinity));const csv=x=>'"'+String(x??'').replaceAll('"','""')+'"';
   lines.push([t,new Date(t).toISOString(),((t-run.startedAt)/1000).toFixed(3),csv(phase==='gap'?'구간 외':label||s?.label||''),csv(phase==='gap'?'구간 외':s?.envName||s?.name||''),v].join(','));
  }
- download('yurif-gsr-'+run.mode+'-'+run.code+'-'+run.date+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
+ download('eureka-research-gsr-'+run.mode+'-'+run.code+'-'+run.date+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
 }
 document.addEventListener('click',e=>{
  const b=e.target.closest('[data-gsr-action]');if(b){if(b.dataset.gsrAction==='connect')gsrConnect();else if(b.dataset.gsrAction==='disconnect')gsrDisconnect();else if(b.dataset.gsrAction==='safety-backup'){const run=labDraft;if(run?.id)window.yurifSafeAdc?.exportCsv(run.id).catch(err=>alert('독립 ADC 백업 실패: '+String(err?.message||err)));else alert('현재 진행 중인 실험이 없습니다.')}return}
