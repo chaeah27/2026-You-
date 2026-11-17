@@ -24,7 +24,7 @@ const state={member:null,unsubs:[],cache:{},pending:new Set(),queued:null,writeJ
 window.yurifCloud={ready:false,status:'연결 중',initialData:null,queueSave};
 
 function show(screen){
- for(const id of ['entry-screen','login-screen','guest-screen','workspace'])$(id).hidden=id!==screen;
+ for(const id of ['entry-screen','participant-screen','login-screen','guest-screen','workspace'])$(id).hidden=id!==screen;
  if(screen!=='workspace')document.body.classList.remove('yurif-workspace-active');
  else document.body.classList.add('yurif-workspace-active');
 }
