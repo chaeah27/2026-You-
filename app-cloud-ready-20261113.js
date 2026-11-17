@@ -591,8 +591,22 @@ window.yurifV2StepEnd=(plan,index,time)=>{
  if(!segment?.startedAt)throw Error('시작되지 않은 구간입니다.');
  if(!segment.endedAt){segment.endedAt=time;labSaveDraft();}
 };
+window.yurifV2StepFailure=(plan,index,time,reason)=>{
+ if(!labDraft?.v2||labDraft.id!==plan.id)throw Error('실험 초안 불일치');
+ const step=labDraft.steps[index];if(!step?.startedAt)return;
+ if(!step.endedAt)step.endedAt=time;
+ step.invalid=true;step.errorReason=reason;labSaveDraft();
+};
+window.yurifV2StepRetry=(plan,index,time)=>{
+ if(!labDraft?.v2||labDraft.id!==plan.id)throw Error('실험 초안 불일치');
+ const step=labDraft.steps[index];if(!step?.invalid)throw Error('실패 처리된 구간만 재측정할 수 있습니다.');
+ labDraft.failedAttempts??=[];
+ labDraft.failedAttempts.push({...step,failedAt:Date.now()});
+ step.startedAt=time;step.endedAt=null;step.invalid=false;step.errorReason='';step.retries=(step.retries||0)+1;
+ labSaveDraft();render();
+};
 window.yurifV2FinishLab=async()=>{
- if(!labDraft?.v2||!labDraft.steps.every(s=>s.startedAt&&s.endedAt))throw Error('21개 측정 구간이 모두 완료되지 않았습니다.');
+ if(!labDraft?.v2||!labDraft.steps.every(s=>s.startedAt&&s.endedAt&&!s.invalid))throw Error('21개 측정 구간이 모두 완료되지 않았습니다.');
  return await labFinish();
 };
 function render(){if(window.yurifCloud?.ready){const label=document.getElementById('cloud-status');if(label)label.textContent=window.yurifCloud.status||'팀 공유 연결됨'}document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let names={registration:'실험 등록',participants:'참가자·설문 관리',home:'연구 대시보드',protocol:'실험 설계·프로토콜',equipment:'장비·보정 관리',journal:'연구 일지',sessions:'실험 세션 기록',analysis:'분석·결과 정리',references:'참고문헌·링크',lab:'실험실',export:'데이터 백업'};document.getElementById('viewlabel').textContent=names[view];document.getElementById('content').innerHTML=({home,protocol,equipment,journal,sessions,analysis,references,lab,registration:()=>window.yurifV2?.registrationHtml?.()||'<p>실험 등록 연결 중</p>',export:backup,participants:()=>window.yurifParticipantAdminHtml?.()||'<div class="panel">참가자 관리 기능을 연결 중입니다.</div>'}[view])();if(view==='participants')window.yurifParticipantAdminLoad?.();if(view==='sessions'){renderExperimenterResults();renderSessionViews();window.yurifParticipantAdminLoad?.()}if(view==='lab'&&!labDraft)labRenderStepEditor();if(view==='lab'&&typeof gsrRefresh==='function')gsrRefresh();window.scrollTo({top:0,behavior:'instant'});}
