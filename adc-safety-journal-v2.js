@@ -87,7 +87,7 @@
   for(const s of samples)lines.push([s.seq,s.time,new Date(s.time).toISOString(),s.adc,csv(s.phase),csv(s.segmentId),csv(s.runId)].join(','));
   const blob=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
   const url=URL.createObjectURL(blob),anchor=document.createElement('a');
-  anchor.href=url;anchor.download='yurif-adc-safety-'+String(runId).replace(/[^a-zA-Z0-9_-]/g,'_')+'.csv';anchor.click();
+  anchor.href=url;anchor.download='eureka-research-adc-safety-'+String(runId).replace(/[^a-zA-Z0-9_-]/g,'_')+'.csv';anchor.click();
   setTimeout(()=>URL.revokeObjectURL(url),2000);
  }
  setInterval(()=>{if(queue.length)flush().catch(()=>{})},1000);
