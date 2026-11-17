@@ -103,7 +103,7 @@ function gsrReceive(adc){
  const d=typeof labDraft==='undefined'?null:labDraft;
  if(d&&d.startedAt&&!d.endedAt){
    d.gsrSamples??=[];
-   if(d.gsrSamples.length>=60000){gsrDevice.status='기록 상한 60,000개 도달: 측정 중지·원시 CSV 백업이 필요합니다.';return}
+   if(d.gsrSamples.length>=200000){gsrDevice.status='기록 상한 200,000개 도달: 측정을 중지하고 원시 CSV 백업하세요.';return}
    const active=d.steps.find(x=>x.startedAt&&!x.endedAt);
    const valid=active&&(!d.v2||now<active.startedAt+Number(active.target||0)*1000);
    const phase=valid?(active.type|| (active.name?.includes('휴식')?'rest':'stimulus')):'gap';
