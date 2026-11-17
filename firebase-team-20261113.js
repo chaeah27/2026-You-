@@ -343,7 +343,30 @@ async function uploadGsrRun(run){
  const promise=task();gsrShared.inflight.set(id,promise);
  try{return await promise}finally{if(gsrShared.inflight.get(id)===promise)gsrShared.inflight.delete(id)}
 }
+async function verifyFullGsrRun(run){
+ if(!run?.id||!Array.isArray(run.gsrSamples))throw Error('검증할 원시 ADC 데이터가 없습니다.');
+ const expected=run.gsrSamples,docs=await getDocs(query(gsrChunks,where('runId','==',String(run.id))));
+ const chunks=docs.docs.map(d=>d.data()).sort((a,b)=>a.index-b.index);
+ const n=Math.ceil(expected.length/GSR_CHUNK);
+ if(chunks.length!==n)throw Error('서버 청크 수 불일치: '+chunks.length+' / '+n);
+ let readCount=0;
+ for(let i=0;i<n;i++){
+  const chunk=chunks[i],start=i*GSR_CHUNK,items=expected.slice(start,start+GSR_CHUNK);
+  if(chunk?.index!==i||!Array.isArray(chunk.points)||chunk.points.length!==items.length)
+   throw Error('청크 '+i+' 누락 또는 개수 오류');
+  for(let j=0;j<items.length;j++){
+   const actual=chunk.points[j],wanted=items[j];
+   if(!Array.isArray(actual)||actual[0]!==wanted[0]||actual[1]!==wanted[1])
+    throw Error('청크 '+i+' · '+j+' 원시값 불일치');
+  }
+  readCount+=items.length;
+ }
+ const metadata=await getDoc(gsrRunRef(run.id));
+ if(!metadata.exists()||metadata.data().sampleCount!==expected.length)throw Error('서버 인덱스와 ADC 수량 불일치');
+ return {verified:true,count:readCount,chunks:n,checkedAt:Date.now()};
+}
 window.yurifGsrSharing={
+ verifyFull:verifyFullGsrRun,
  upload:uploadGsrRun,
  status:id=>gsrShared.verified.get(id)||null
 };
