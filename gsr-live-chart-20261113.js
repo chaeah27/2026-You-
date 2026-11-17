@@ -101,10 +101,16 @@ function gsrReceive(adc){
  const cutoff=now-125000;
  while(gsrDevice.livePoints.length&&(gsrDevice.livePoints[0][0]<cutoff||gsrDevice.livePoints.length>2000))gsrDevice.livePoints.shift();
  const d=typeof labDraft==='undefined'?null:labDraft;
- if(d&&d.startedAt&&!d.endedAt&&d.steps.some(x=>x.startedAt&&!x.endedAt)){
+ if(d&&d.startedAt&&!d.endedAt){
    d.gsrSamples??=[];
-   if(d.gsrSamples.length>=60000){gsrDevice.status='기록 상한 60,000개 도달: 실험을 종료하고 CSV 백업하세요.';return}
+   if(d.gsrSamples.length>=60000){gsrDevice.status='기록 상한 60,000개 도달: 측정 중지·원시 CSV 백업이 필요합니다.';return}
+   const active=d.steps.find(x=>x.startedAt&&!x.endedAt);
+   const phase=active?.type|| (active?.name?.includes('휴식')?'rest':active?'stimulus':'gap');
+   // The safety journal includes gap samples, not just active segments.
+   // The old [timestamp,ADC] array remains unchanged for compatibility with archives and Firestore.
+   const seq=d.gsrSamples.length;
    d.gsrSamples.push([now,adc]);
+   window.yurifSafeAdc?.record(d.id,seq,now,adc,phase,active?.label||'');
    if(now-gsrDevice.lastPersist>2500){gsrDevice.lastPersist=now;labSaveDraft()}
  }
 }
@@ -129,7 +135,7 @@ async function gsrReadLoop(port){
  finally{
   if(gsrDevice.reader){try{gsrDevice.reader.releaseLock()}catch(e){}}
   gsrDevice.reader=null;gsrDevice.connected=false;
-  if(labDraft&&labDraft.gsrSamples)labSaveDraft();
+  if(labDraft&&labDraft.gsrSamples){labSaveDraft();window.yurifSafeAdc?.flush().catch(()=>{});}
   if(!gsrDevice.stopping&&gsrDevice.status==='USB 연결됨')gsrDevice.status='USB 연결 종료';
   gsrRefresh();
  }
@@ -162,7 +168,7 @@ function gsrExportCsv(run){
  download('yurif-gsr-'+run.mode+'-'+run.code+'-'+run.date+'.csv','\ufeff'+lines.join('\r\n'),'text/csv;charset=utf-8');
 }
 document.addEventListener('click',e=>{
- const b=e.target.closest('[data-gsr-action]');if(b){if(b.dataset.gsrAction==='connect')gsrConnect();else if(b.dataset.gsrAction==='disconnect')gsrDisconnect();return}
+ const b=e.target.closest('[data-gsr-action]');if(b){if(b.dataset.gsrAction==='connect')gsrConnect();else if(b.dataset.gsrAction==='disconnect')gsrDisconnect();else if(b.dataset.gsrAction==='safety-backup'){const run=labDraft;if(run?.id)window.yurifSafeAdc?.exportCsv(run.id).catch(err=>alert('독립 ADC 백업 실패: '+String(err?.message||err)));else alert('현재 진행 중인 실험이 없습니다.')}return}
  const csv=e.target.closest('[data-gsr-csv]');if(csv){const run=gsrRunById(csv.dataset.gsrCsv);if(run)gsrExportCsv(run)}
 });
 setInterval(gsrRefresh,400);
