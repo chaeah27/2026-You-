@@ -448,7 +448,7 @@ function lab(){
  const tabs='<div class="lab-tabs"><button type="button" data-lab-tab="pilot" class="'+(labArchiveTab==='pilot'?'active':'')+'">개인 예비실험</button><button type="button" data-lab-tab="stage1" class="'+(labArchiveTab==='stage1'?'active':'')+'">1차 실험</button><button type="button" data-lab-tab="stage2" class="'+(labArchiveTab==='stage2'?'active':'')+'">2차 실험</button></div>';
  return head('실험실','실험 환경의 순서를 미리 지정하고 버튼으로 구간 경계를 기록합니다. 개인 예비실험은 정식 결과와 완전히 분리해 보관합니다.','LAB / EXPERIMENT')+
  '<div class="notice">Arduino GSR 센서의 원시 ADC를 USB로 수집합니다. 피부전도도(µS) 환산은 보정 전까지 지원하지 않습니다. Apple Watch 실시간 연결도 아직 지원하지 않습니다. 측정 중 브라우저 탭과 컴퓨터를 켜 두세요.</div>'+
- (typeof gsrLabPanel==='function'?gsrLabPanel():'')+labSaveCheckPanel()+(labDraft?labDraftView():labEditor())+(window.yurifGsrSharedPanel?.()||'')+tabs+labArchive(labArchiveTab);
+ (typeof gsrLabPanel==='function'?gsrLabPanel():'')+labSafetyPanel()+labSaveCheckPanel()+(labDraft?labDraftView():labEditor())+(window.yurifGsrSharedPanel?.()||'')+tabs+labArchive(labArchiveTab);
 }
 let labArchiveTab='pilot';
 function labTick(){
@@ -476,6 +476,26 @@ function recordLabSaveCheck(next){
  const panel=document.getElementById('lab-save-check');
  if(panel)panel.outerHTML=labSaveCheckPanel();
 }
+function labSafetyPanel(){
+ const status=window.yurifSafeAdc?.status?.();
+ const run=labDraft;
+ const badge=!status?'안전 기록 모듈 미연결':status.failed?'저장 오류: '+esc(status.failed):
+  status.pending?'로컬 디스크 기록 대기 '+Number(status.pending)+'개':'로컬 영속 저장 모듈 준비됨';
+ return '<section class="panel"><h2>ADC 독립 기록 안전장치 <span class="pill">개발 브랜치</span></h2>'+
+  '<p class="muted">실험 시작 후 구간 외 ADC를 포함해 별도 IndexedDB에 기록합니다. 브라우저 저장은 기기 고장에 대한 백업이 아니므로 원시 CSV를 별도로 보관하세요.</p>'+
+  '<p id="adc-safety-status">'+badge+'</p>'+
+  (run?.startedAt?'<div class="actions"><button class="btn secondary" type="button" data-adc-safety-export="'+esc(run.id)+'">현재 실험 독립 ADC CSV</button></div>':'')+
+  '<p class="muted">Firebase 저장 검증 완료와 IndexedDB 보존 여부는 별도의 상태입니다. 둘 다 확인해 주세요.</p></section>';
+}
+document.addEventListener('click',e=>{
+ const b=e.target.closest('[data-adc-safety-export]');
+ if(!b)return;
+ window.yurifSafeAdc?.exportCsv(b.dataset.adcSafetyExport).catch(err=>alert('ADC CSV 생성 실패: '+String(err?.message||err)));
+});
+setInterval(()=>{
+ const el=document.getElementById('adc-safety-status'),v=window.yurifSafeAdc?.status?.();
+ if(el&&v)el.textContent=v.failed?'독립 저장 오류: '+v.failed:v.pending?'디스크 기록 대기 '+v.pending+'개':'로컬 영속 저장 모듈 정상 (마지막 기록 '+(v.lastSaved?new Date(v.lastSaved).toLocaleTimeString('ko-KR'):'대기')+')';
+},1000);
 function labSaveCheckPanel(){
  const s=lastLabSaveCheck;if(!s)return '';
  const cloud=s.cloud==='verified'?'✅ Firebase 원시값 '+Number(s.cloudCount||0)+'개 재확인 완료':
@@ -491,7 +511,7 @@ function labSaveCheckPanel(){
 window.yurifGetActiveGsrRun=()=>labDraft;
 window.yurifFindGsrRun=id=>[...(db.pilotRuns||[]),...(db.labRuns||[])].find(x=>x.id===id);
 
-function labFinish(){
+async function labFinish(){
  if(!labDraft||!labDraft.startedAt)return;
  if(!confirm('현재 구간을 종료하고 실험 기록을 저장할까요?'))return;
  const t=Date.now();labDraft.endedAt=t;
@@ -499,6 +519,18 @@ function labFinish(){
  if(i>=0)labDraft.steps[i].endedAt=t;
  const finished=labDraft;
  const samples=Array.isArray(finished.gsrSamples)?finished.gsrSamples:[];
+ // Commit pending independent ADC journal samples before declaring an experiment finished.
+ // A failed IndexedDB check leaves the original draft in place, and does not erase existing samples.
+ if(samples.length&&window.yurifSafeAdc){
+  try{
+   const check=await window.yurifSafeAdc.validate(finished.id,samples.length);
+   if(!check.contiguous)throw Error('ADC 수량 불일치 (기록 '+check.stored+' / 수집 '+check.expected+')');
+   finished.adcSafetyVerifiedAt=Date.now();
+  }catch(err){
+   alert('독립 ADC 저장 검증에 실패했습니다: '+String(err?.message||err)+'\\n현재 실험 초안을 보존했습니다. CSV·JSON으로 백업하고 문제를 확인해 주세요.');
+   labSaveDraft();return;
+  }
+ }
  // Do not clear the unsaved draft unless the local archive survives a readback.
  try{localStorage.setItem('yurif_experiment_recovery_'+finished.id,JSON.stringify(finished))}
  catch(err){alert('독립 복구 사본 저장에 실패했습니다. 실험 초안은 유지됩니다. 저장 공간을 확인해 주세요.');labSaveDraft();return}
