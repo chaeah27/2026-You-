@@ -311,7 +311,13 @@ async function retryPendingGsr(){
  retryingGsr=true;
  try{
   for(const id of pendingGsr()){
-   const run=window.yurifFindGsrRun?.(id);
+   const archive=window.yurifFindGsrRun?.(id);
+   if(!archive)continue;
+   let run=archive;
+   if(!run.gsrSamples?.length&&window.yurifSafeAdc){
+    const rows=await window.yurifSafeAdc.readRun(id);
+    if(rows.length)run={...archive,gsrSamples:rows.map(x=>[x.time,x.adc,x.phase,x.segmentId])};
+   }
    if(!run?.gsrSamples?.length)continue;
    try{
     await uploadGsrRun(run);
