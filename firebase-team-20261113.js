@@ -672,6 +672,8 @@ document.addEventListener('submit',async e=>{
  if(!/^[A-Za-z0-9_-]{10,128}$/.test(uid))return alert('연구원의 Firebase UID를 확인해 주세요.');
  if(!confirm('이 UID를 승인된 연구원으로 등록할까요? UID의 소유자를 먼저 확인해 주세요.'))return;
  try{
+  const existing=await getDoc(doc(store,'members',uid));
+  if(existing.exists()&&existing.data().role==='admin')throw new Error('관리자 계정은 연구원으로 덮어쓸 수 없습니다.');
   await setDoc(doc(store,'members',uid),{role:'researcher',active:true});
   const check=await getDoc(doc(store,'members',uid));
   if(!check.exists()||check.data().role!=='researcher'||check.data().active!==true)throw Error('승인 결과 확인 실패');
