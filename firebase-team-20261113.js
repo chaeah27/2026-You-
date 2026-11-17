@@ -472,6 +472,7 @@ function renderParticipantSteps(){
   '<div class="field"><label>'+shortText(plan.arousalQuestion||'현재 각성 수준 (1 매우 낮음 ~ 9 매우 높음)')+'</label>'+
   '<input name="arousal" type="number" min="1" max="9" step="1" required></div>'+
   (plan.stage==='stage2'?'<div class="field"><label>'+shortText(plan.likingQuestion||'대화 상대에 대한 호감 정도 (1 매우 낮음 ~ 9 매우 높음)')+'</label><input name="liking" type="number" min="1" max="9" step="1" required></div>':'')+
+  '<label class="participant-confirm"><input type="checkbox" name="finished" value="yes" required> '+(plan.stage==='stage1'?'위 감각 환경의 체험을 마친 후 응답했습니다.':'전체 대화를 마친 후 응답했습니다.')+'</label>'+ 
   '<div class="field"><label>추가 느낌 · 특이사항 (선택)</label><textarea name="note" maxlength="1000"></textarea></div>'+
   '<button type="submit" class="btn" id="participant-survey-save">'+(completed===slots.length-1?'최종 설문 저장':'응답 저장하고 다음 단계')+'</button></form></section>';
 }
@@ -492,11 +493,12 @@ async function recordParticipantAnswer(form){
  const next=participantSurveySlots(participantState.plan).find(x=>!participantState.answers.has(x.slot));
  if(!next)return;
  const values=Object.fromEntries(new FormData(form));
+ if(values.finished!=='yes')return portalMsg('해당 실험 구간이 끝났음을 확인한 뒤 설문을 저장해 주세요.');
  const valence=Number(values.valence),arousal=Number(values.arousal),liking=values.liking==null?null:Number(values.liking);
  if(![valence,arousal].every(v=>Number.isInteger(v)&&v>=1&&v<=9)||(liking!==null&&(!Number.isInteger(liking)||liking<1||liking>9)))return portalMsg('설문 점수는 1~9 사이의 정수로 입력해 주세요.');
  const button=$('participant-survey-save');button.disabled=true;portalMsg('응답 저장 중…');
  const answer={uid:auth.currentUser.uid,slot:next.slot,environment:next.env,index:next.index,
-  stage:participantState.plan.stage,valence,arousal,liking:liking===null?'':liking,
+  stage:participantState.plan.stage,finishedConfirmed:true,valence,arousal,liking:liking===null?'':liking,
   note:String(values.note||'').slice(0,1000),createdAt:serverTimestamp()};
  try{
   await setDoc(participantAnswerRef(participantState.key,next.slot),answer);
