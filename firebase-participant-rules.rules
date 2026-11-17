@@ -66,8 +66,9 @@ service cloud.firestore {
    allow list: if isMember() || ownsConsent(token);
    allow create: if agreed(token)
     && !isMember()
-    && request.resource.data.keys().hasOnly(['uid','slot','environment','index','stage','valence','arousal','liking','note','createdAt'])
+    && request.resource.data.keys().hasOnly(['uid','slot','environment','index','stage','finishedConfirmed','valence','arousal','liking','note','createdAt'])
     && request.resource.data.uid == request.auth.uid
+    && request.resource.data.finishedConfirmed == true
     && request.resource.data.slot == slot
     && request.resource.data.stage == get(/databases/$(database)/documents/participantAccess/$(token)).data.stage
     && request.resource.data.environment is string
@@ -83,11 +84,12 @@ service cloud.firestore {
       && request.resource.data.liking >= 1 && request.resource.data.liking <= 9))
     && request.resource.data.createdAt == request.time
     && (
-     (request.resource.data.stage == 'stage2' && slot == 'final' && request.resource.data.index == 0)
+     (request.resource.data.stage == 'stage2' && slot == 'final' && request.resource.data.index == 0 && request.resource.data.environment == '대화 종료 후')
      ||
      (request.resource.data.stage == 'stage1' && slot.matches('s[0-9]+')
       && request.resource.data.index >= 0
-      && request.resource.data.index < get(/databases/$(database)/documents/participantAccess/$(token)).data.order.size())
+      && request.resource.data.index < get(/databases/$(database)/documents/participantAccess/$(token)).data.order.size()
+      && request.resource.data.environment == get(/databases/$(database)/documents/participantAccess/$(token)).data.order[request.resource.data.index])
     );
    allow update, delete: if false;
   }
