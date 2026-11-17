@@ -45,8 +45,8 @@ service cloud.firestore {
    allow update: if isAdmin() || (isMember()
     && resource.data.v2 == true
     && request.resource.data.v2 == true
-    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['audioQuestion','audioOptions'])
-    && request.resource.data.code == resource.data.code
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['audioQuestion','audioOptions','code'])
+    && request.resource.data.experimentId == resource.data.experimentId
     && request.resource.data.order == resource.data.order);
    allow delete: if false;
   }
@@ -109,9 +109,12 @@ service cloud.firestore {
    allow update: if isMember()
     && request.resource.data.order == resource.data.order
     && request.resource.data.accessKey == resource.data.accessKey
-    && request.resource.data.code == resource.data.code
     && request.resource.data.stage == resource.data.stage;
    allow delete: if false;
+  }
+  match /experimentsV2/{experimentId}/audit/{auditId}{
+   allow get, list, create: if isMember();
+   allow update, delete: if false;
   }
   match /experimentProgress/{token}{
    allow get: if isMember() || agreed(token);
@@ -119,7 +122,6 @@ service cloud.firestore {
    allow create: if isMember();
    allow update: if isMember()
     && request.resource.data.experimentId == resource.data.experimentId
-    && request.resource.data.code == resource.data.code
     && request.resource.data.phase in ['registered','measurement','restReady','rest','setup','survey','completed','aborted','sensorError'];
    allow delete: if false;
   }
