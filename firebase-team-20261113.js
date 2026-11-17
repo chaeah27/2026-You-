@@ -1,3 +1,4 @@
+import {installYurifV2} from './experiment-v2-controller.js?v=1';
 import {initializeApp} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-app.js';
 import {getAuth,onAuthStateChanged,signInWithEmailAndPassword,createUserWithEmailAndPassword,signInAnonymously,signOut} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-auth.js';
 import {getFirestore,collection,doc,getDoc,getDocs,onSnapshot,writeBatch,setDoc,serverTimestamp,query,where} from 'https://www.gstatic.com/firebasejs/13.2.0/firebase-firestore.js';
@@ -22,6 +23,7 @@ const $=id=>document.getElementById(id);
 const safe=s=>String(s??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const state={member:null,unsubs:[],cache:{},pending:new Set(),queued:null,writeJob:null,busy:false,ready:false,started:false,guestUnsub:null,publicDoc:{sections:{}}};
 window.yurifCloud={ready:false,status:'연결 중',initialData:null,queueSave};
+installYurifV2({auth,store});
 
 function show(screen){
  for(const id of ['entry-screen','login-screen','guest-screen','workspace'])$(id).hidden=id!==screen;
@@ -54,6 +56,7 @@ $('guest-refresh').addEventListener('click',()=>{watchPublic(true)});
 
 function cleanup(){
  deactivateGsrSharing();
+ window.yurifV2?.deactivateResearch();
  state.unsubs.forEach(fn=>fn());state.unsubs=[];state.cache={};state.pending.clear();state.started=false;state.ready=false;state.member=null;
  window.yurifCloud.ready=false;window.yurifCloud.initialData=null;
  clearTimeout(timer);state.queued=null;
@@ -108,7 +111,7 @@ onAuthStateChanged(auth,async user=>{
 
 async function loadWorkspace(){
  if(window.yurifCloudGetData){for(const type of types)window.yurifCloudApply(type,window.yurifCloud.initialData[type]||[]);return;}
- for(const src of ['adc-safety-journal-v2.js?v=1','experiment-v2-protocol.js?v=1','app-cloud-ready-20261113.js?v=participant-team-complete-20261117','gsr-live-chart-20261113.js']){
+ for(const src of ['adc-safety-journal-v2.js?v=1','app-cloud-ready-20261113.js?v=participant-team-complete-20261117','gsr-live-chart-20261113.js']){
   await new Promise((resolve,reject)=>{const s=document.createElement('script');s.src=src;s.onload=resolve;s.onerror=()=>reject(new Error(src+' 파일을 불러오지 못했습니다'));document.body.append(s)});
  }
 }
@@ -439,6 +442,7 @@ async function enterParticipantPortal(){
 }
 $('go-participant').addEventListener('click',enterParticipantPortal);
 $('participant-exit').addEventListener('click',async()=>{
+ window.yurifV2?.stopParticipant();
  participantState.key='';participantState.plan=null;participantState.consent=null;participantState.answers=new Map();
  $('participant-steps').innerHTML='';$('participant-access-code').value='';$('participant-entry-form').hidden=false;portalMsg('');
  // Preserve anonymous session so an accidental exit does not lock the participant out of the one-time consent record.
@@ -448,11 +452,13 @@ $('participant-entry-form').addEventListener('submit',async e=>{
  e.preventDefault();
  if(!auth.currentUser?.isAnonymous)return portalMsg('참가자 인증이 필요합니다. 연구원 계정과 별도의 브라우저에서 접속해 주세요.');
  const key=$('participant-access-code').value.trim().toLowerCase().replaceAll('-','');
+ const code=$('participant-code')?.value.trim()||'';
  if(!/^[0-9a-f]{32}$/.test(key))return portalMsg('연구원에게 받은 32자리 입장 코드를 정확히 입력해 주세요.');
  const btn=$('participant-enter-btn');btn.disabled=true;portalMsg('참가 정보를 확인하는 중…');
  try{
   const snap=await getDoc(participantPlanRef(key));
   if(!snap.exists()||snap.data().active!==true)throw Error('활성화된 참가 코드가 아닙니다.');
+  if(snap.data().v2&&code!==snap.data().code)throw Error('참가자 코드와 임시 비밀번호가 일치하지 않습니다.');
   participantState.key=key;participantState.plan=snap.data();
   const consentSnap=await getDoc(participantConsentRef(key));
   participantState.consent=consentSnap.exists()?consentSnap.data():null;
@@ -483,6 +489,7 @@ function renderParticipantSteps(){
  if(!consent.agreed){
   root.innerHTML='<section class="panel"><h2>동의하지 않음</h2><p>동의하지 않았으므로 실험 설문을 진행하지 않습니다. 참여를 원하지 않는다는 이유로 불이익이 없어야 합니다.</p></section>';return;
  }
+ if(plan.v2){window.yurifV2?.renderParticipant({key:participantState.key,plan,consent});return;}
  const slots=participantSurveySlots(plan),next=slots.find(x=>!participantState.answers.has(x.slot));
  if(!next){
   root.innerHTML='<section class="panel"><h2>모든 설문 완료</h2><p>응답이 서버에 저장되었습니다. 연구원의 안내를 따라 주세요.</p>'+
