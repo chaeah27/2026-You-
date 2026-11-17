@@ -12,7 +12,7 @@ export function installYurifV2({auth,store}){
  const refAnswer=(key,slot)=>doc(store,'participantAnswersV2',key,'items',slot);
  const state={list:[],selected:'',progress:null,answers:new Map(),offPlans:null,offProgress:null,offAnswers:null,
    participantKey:'',participantPlan:null,participantReady:false,participantProgress:null,participantAnswers:new Map(),
-   offParticipantProgress:null,offParticipantAnswers:null,transitioning:false,warning:''};
+   offParticipantProgress:null,offParticipantAnswers:null,offParticipantPlan:null,transitioning:false,warning:''};
  const activePlan=()=>state.list.find(p=>p.id===state.selected);
  const envChoices=()=>window.yurifV2EnvironmentList?.()||[];
  function activateResearch(){
@@ -321,13 +321,18 @@ export function installYurifV2({auth,store}){
   finally{button.disabled=false}
  });
  function stopParticipant(){
-  state.offParticipantProgress?.();state.offParticipantAnswers?.();state.offParticipantProgress=null;state.offParticipantAnswers=null;
+  state.offParticipantProgress?.();state.offParticipantAnswers?.();state.offParticipantPlan?.();state.offParticipantProgress=null;state.offParticipantAnswers=null;state.offParticipantPlan=null;
   state.participantKey='';state.participantPlan=null;state.participantProgress=null;state.participantAnswers=new Map();
  }
  function renderParticipant({key,plan}){
   if(state.participantKey!==key){
    stopParticipant();state.participantKey=key;state.participantPlan=plan;
    state.participantReady=sessionStorage.getItem('yurif_v2_ready_'+key)==='yes';
+   state.offParticipantPlan=onSnapshot(doc(store,'participantAccess',key),snap=>{
+    if(!snap.exists()||snap.data().active!==true){$('participant-steps').textContent='참가자 입장 코드가 비활성화되었습니다.';return}
+    state.participantPlan=snap.data();updateParticipant();
+   },err=>{$('participant-steps').textContent='설문 정보 갱신 실패: '+err.message});
+
    state.offParticipantProgress=onSnapshot(refProgress(key),snap=>{
     state.participantProgress=snap.exists()?snap.data():null;updateParticipant();
    },err=>{$('participant-steps').textContent='진행 상태를 확인할 수 없습니다. Firebase 보안 규칙 확인: '+err.message});
