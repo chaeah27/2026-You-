@@ -202,9 +202,13 @@ export function installYurifV2({auth,store}){
    await window.yurifV2PrepareLab?.(plan,P().makeSegments(plan.order));
   }
   if(kind==='stimulus'&&(!plan.audioQuestion||plan.audioOptions?.length!==5)&&nextPos>=8)throw Error('청각 설문 문항이 미확정입니다. 실험 설계에서 먼저 등록해야 합니다.');
-  const startedAt=Date.now(),segment=kind==='baseline'?0:kind==='stimulus'?1+2*nextPos:2+2*nextPos;
-  await transition(kind==='rest'?'rest':'measurement',expected,{position:nextPos,segment,startedAt,endedAt:null});
+  const segment=kind==='baseline'?0:kind==='stimulus'?1+2*nextPos:2+2*nextPos;
+  // Obtain server authorization first. Do not backdate measurement to network-request time.
+  await transition(kind==='rest'?'rest':'measurement',expected,{position:nextPos,segment,startedAt:null,endedAt:null});
+  const startedAt=Date.now();
   window.yurifV2StepStart?.(plan,segment,startedAt);
+  state.progress={...state.progress,startedAt};refreshLab();
+  await setDoc(refProgress(plan.accessKey),{startedAt},{merge:true});
  }
  async function handleSensorFailure(){
   const p=state.progress,plan=activePlan();
@@ -220,9 +224,11 @@ export function installYurifV2({auth,store}){
   const p=state.progress,plan=activePlan();if(!p||p.phase!=='sensorError'||!plan)throw Error('재측정 대기 상태가 아닙니다.');
   if(!window.yurifV2ConnectedSensor?.())throw Error('먼저 Arduino 센서를 다시 연결해 주세요.');
   const kind=p.failedPhase==='rest'?'rest':'measurement';
+  await transition(kind,'sensorError',{startedAt:null,endedAt:null,failedAt:null,failedSegment:null,failedPhase:null});
   const start=Date.now();
-  await transition(kind,'sensorError',{startedAt:start,endedAt:null,failedAt:null,failedSegment:null,failedPhase:null});
   window.yurifV2StepRetry?.(plan,p.segment,start);
+  state.progress={...state.progress,startedAt:start};refreshLab();
+  await setDoc(refProgress(plan.accessKey),{startedAt:start},{merge:true});
  }
  async function endTimed(){
   const p=state.progress,plan=activePlan();
