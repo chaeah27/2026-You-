@@ -44,7 +44,8 @@ export function installYurifV2({auth,store}){
    '<div class="field"><label>예약 일시</label><input type="datetime-local" name="scheduledAt" required></div>'+
    '</div><div class="field"><label>특이사항</label><textarea name="notes" maxlength="2000"></textarea></div>'+
    '<div class="field"><label>참가자 사전 안내서 및 동의 설명문</label><textarea name="consentText" rows="5" required placeholder="연구 목적, 절차, 자발적 참여 및 철회, 안전 유의사항, 기록 보존기간 등을 직접 작성"></textarea></div>'+
-   '<div class="field"><label>청각 설문 문항 (아직 미확정이면 비워 두기)</label><input name="audioQuestion" maxlength="300" placeholder="사용자가 확정할 청각 정서 반응 질문"></div></section>'+
+   '<div class="field"><label>청각 설문 문항 (미확정이면 비워 두기)</label><input name="audioQuestion" maxlength="300" placeholder="직접 확정할 질문"></div>'+ 
+   '<div class="field"><label>청각 응답 선택지 5개 (한 줄에 하나씩)</label><textarea name="audioOptions" rows="5"></textarea></div></section>'+
    selections+
    '<section class="panel"><button class="btn" type="submit">환경 순서 셔플·확정하고 실험 등록</button><p class="muted">임시 비밀번호로 32자리 무작위 입장키를 발급합니다. 입장키는 별도 보관하고 승인된 연구원만 접근하도록 합니다.</p></section></form>'+
    '<section class="panel"><h2>예정된 실험</h2><div id="v2-registration-list">'+registrationRows()+'</div><button type="button" class="btn secondary" id="v2-csv-export">예정 실험 CSV 다운로드</button></section>';
@@ -55,7 +56,8 @@ export function installYurifV2({auth,store}){
    '<p class="muted">예약: '+esc(p.scheduledAt)+' · 상태: '+esc(p.active===false?'비활성':'등록')+' · '+esc(p.notes||'특이사항 없음')+'</p>'+
    '<p>시각: '+(p.order||[]).slice(0,4).map(x=>esc(x.name)).join(' → ')+'<br>후각: '+(p.order||[]).slice(4,8).map(x=>esc(x.name)).join(' → ')+
    '<br>청각: '+(p.order||[]).slice(8,10).map(x=>esc(x.name)).join(' → ')+'</p>'+
-   '<button type="button" class="btn secondary" data-v2-copy="'+esc(p.id)+'">참가자 코드·임시 비밀번호 복사</button></div>').join('');
+   '<button type="button" class="btn secondary" data-v2-copy="'+esc(p.id)+'">참가자 코드·임시 비밀번호 복사</button>'+ 
+   '<details><summary>청각 설문 문항·선택지 수정 (환경 순서는 고정)</summary><form data-v2-audio-edit="'+esc(p.id)+'"><div class="field"><label>문항</label><input name="audioQuestion" maxlength="300" value="'+esc(p.audioQuestion||'')+'"></div><div class="field"><label>선택지 5개 (한 줄씩)</label><textarea name="audioOptions" rows="5">'+esc((p.audioOptions||[]).join('\n'))+'</textarea></div><button type="submit" class="btn secondary">설문 문항 저장</button></form></details></div>').join('');
  }
  function refreshRegistration(){
   const root=$('v2-registration-list');if(root)root.innerHTML=registrationRows();
@@ -82,12 +84,14 @@ export function installYurifV2({auth,store}){
   const plan={code,researcherCode:String(data.researcherCode).trim(),stage:'stage1',
    scheduledAt:data.scheduledAt,notes:String(data.notes||''),order,accessKey:key,
    consentText:String(data.consentText||'').trim(),audioQuestion:String(data.audioQuestion||'').trim(),
+   audioOptions:String(data.audioOptions||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean),
    active:true,createdAt:serverTimestamp()};
   if(!plan.consentText)throw Error('사전 안내서가 필요합니다.');
+  if((plan.audioQuestion||plan.audioOptions.length)&&(!plan.audioQuestion||plan.audioOptions.length!==5))throw Error('청각 설문 문항과 선택지 5개를 모두 입력하거나 둘 다 비워 두세요.');
   const batch=writeBatch(store);
   batch.set(doc(plans,id),plan);
   batch.set(doc(store,'participantAccess',key),{code,experimentId:id,v2:true,stage:'stage1',
-   order:order.map(x=>x.name),active:true,consentText:plan.consentText,audioQuestion:plan.audioQuestion,createdAt:serverTimestamp()});
+   order:order.map(x=>x.name),active:true,consentText:plan.consentText,audioQuestion:plan.audioQuestion,audioOptions:plan.audioOptions,createdAt:serverTimestamp()});
   batch.set(refProgress(key),{experimentId:id,code,phase:'registered',position:-1,
    startedAt:null,endedAt:null,updatedAt:serverTimestamp()});
   await batch.commit();
@@ -189,7 +193,7 @@ export function installYurifV2({auth,store}){
   if(kind==='baseline'){
    await window.yurifV2PrepareLab?.(plan,P().makeSegments(plan.order));
   }
-  if(kind==='stimulus'&& !plan.audioQuestion && nextPos>=8)throw Error('청각 설문 문항이 미확정입니다. 실험 설계에서 먼저 등록해야 합니다.');
+  if(kind==='stimulus'&&(!plan.audioQuestion||plan.audioOptions?.length!==5)&&nextPos>=8)throw Error('청각 설문 문항이 미확정입니다. 실험 설계에서 먼저 등록해야 합니다.');
   const startedAt=Date.now(),segment=kind==='baseline'?0:kind==='stimulus'?1+2*nextPos:2+2*nextPos;
   await transition(kind==='rest'?'rest':'measurement',expected,{position:nextPos,segment,startedAt,endedAt:null});
   window.yurifV2StepStart?.(plan,segment,startedAt);
@@ -217,6 +221,26 @@ export function installYurifV2({auth,store}){
  setInterval(()=>{endTimed().catch(()=>{});const el=$('v2-countdown'),p=state.progress;
   if(el&&p?.startedAt){const remaining=(p.phase==='rest'?30:60)-Math.floor((Date.now()-p.startedAt)/1000);el.textContent='남은 시간 '+Math.max(0,remaining)+'초';}
  },500);
+ document.addEventListener('submit',async e=>{
+  const form=e.target.closest('[data-v2-audio-edit]');if(!form)return;
+  e.preventDefault();
+  const plan=state.list.find(x=>x.id===form.dataset.v2AudioEdit);if(!plan)return;
+  const fd=new FormData(form),question=String(fd.get('audioQuestion')||'').trim();
+  const options=String(fd.get('audioOptions')||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  if((question||options.length)&&(!question||options.length!==5)){alert('문항과 선택지 5개를 모두 입력하거나 둘 다 비워 주세요.');return}
+  if(!confirm('등록된 실험의 청각 설문만 수정할까요? 감각 환경 순서는 변경되지 않습니다.'))return;
+  const button=form.querySelector('button[type=submit]');button.disabled=true;
+  try{
+   const batch=writeBatch(store);
+   batch.update(doc(plans,plan.id),{audioQuestion:question,audioOptions:options});
+   batch.update(doc(store,'participantAccess',plan.accessKey),{audioQuestion:question,audioOptions:options});
+   await batch.commit();
+   const confirmed=await getDocFromServer(doc(plans,plan.id));
+   if(!confirmed.exists()||confirmed.data().audioQuestion!==question)throw Error('서버 저장 확인 실패');
+   alert('청각 설문 업데이트 완료');
+  }catch(err){alert('청각 설문 저장 실패: '+String(err.message||err))}
+  finally{button.disabled=false}
+ });
  document.addEventListener('submit',async e=>{
   if(e.target.id!=='v2-registration-form')return;e.preventDefault();
   const button=e.target.querySelector('button[type=submit]');button.disabled=true;
@@ -289,10 +313,10 @@ export function installYurifV2({auth,store}){
     ['매우 나쁨','살짝 불쾌함','아무 변화 없음','좋음','매우 좋음'].map((t,i)=>'<label class="participant-confirm"><input type="radio" required name="rating" value="'+(i+1)+'"> '+t+'</label>').join('');
   }else{
    body='<p>'+esc(plan.audioQuestion||'청각 설문 문항이 아직 확정되지 않았습니다. 연구원에게 문의해 주세요.')+'</p>'+
-    (plan.audioQuestion?['매우 부정적','다소 부정적','중립','다소 긍정적','매우 긍정적'].map((t,i)=>
+    (plan.audioQuestion&&plan.audioOptions?.length===5?plan.audioOptions.map((t,i)=>
       '<label class="participant-confirm"><input type="radio" required name="rating" value="'+(i+1)+'"> '+t+'</label>').join(''):'');
   }
-  return open+body+'<button type="submit" class="btn" '+(!plan.audioQuestion&&slot.startsWith('auditory')?'disabled':'')+'>설문 제출</button></form></section>';
+  return open+body+'<button type="submit" class="btn" '+((!plan.audioQuestion||plan.audioOptions?.length!==5)&&slot.startsWith('auditory')?'disabled':'')+'>설문 제출</button></form></section>';
  }
  document.addEventListener('click',e=>{
   if(e.target.id==='v2-participant-ready'){state.participantReady=true;sessionStorage.setItem('yurif_v2_ready_'+state.participantKey,'yes');updateParticipant()}
