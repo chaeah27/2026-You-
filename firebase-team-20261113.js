@@ -424,7 +424,7 @@ document.addEventListener('click',async e=>{
    lines.push([t,new Date(t).toISOString(),((t-run.startedAt)/1000).toFixed(3),quote(s?.label||''),quote(s?.envName||s?.name||''),v].join(','));
   }
   const file=new Blob(['\ufeff'+lines.join('\r\n')],{type:'text/csv;charset=utf-8'});
-  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download='yurif-shared-gsr-'+(run.date||'')+'-'+(run.code||'experiment')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);return;
+  const url=URL.createObjectURL(file),a=document.createElement('a');a.href=url;a.download='eureka-research-shared-gsr-'+(run.date||'')+'-'+(run.code||'experiment')+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);return;
  }
  const b=e.target.closest('[data-gsr-share]');
  if(!b)return;
