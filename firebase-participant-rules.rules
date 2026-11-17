@@ -131,6 +131,23 @@ service cloud.firestore {
   }
   // Each survey answer is immutable; the participant may submit only
   // while the researcher has unlocked this exact survey slot.
+  match /participantPresenceV2/{token}{
+   allow get: if isMember() || agreed(token);
+   allow list: if isMember();
+   allow create: if agreed(token)
+    && !isMember()
+    && request.resource.data.keys().hasOnly(['uid','ready','readyAt'])
+    && request.resource.data.uid == request.auth.uid
+    && request.resource.data.ready == true
+    && request.resource.data.readyAt == request.time;
+   allow update: if agreed(token)
+    && !isMember()
+    && resource.data.uid == request.auth.uid
+    && request.resource.data.uid == resource.data.uid
+    && request.resource.data.ready == true
+    && request.resource.data.keys().hasOnly(['uid','ready','readyAt']);
+   allow delete: if false;
+  }
   match /participantAnswersV2/{token}/items/{slot}{
    allow get, list: if isMember() || agreed(token);
    allow create: if agreed(token)
