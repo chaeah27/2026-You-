@@ -57,6 +57,12 @@ export function installYurifV2({auth,store}){
    '<p>시각: '+(p.order||[]).slice(0,4).map(x=>esc(x.name)).join(' → ')+'<br>후각: '+(p.order||[]).slice(4,8).map(x=>esc(x.name)).join(' → ')+
    '<br>청각: '+(p.order||[]).slice(8,10).map(x=>esc(x.name)).join(' → ')+'</p>'+
    '<button type="button" class="btn secondary" data-v2-copy="'+esc(p.id)+'">참가자 코드·임시 비밀번호 복사</button>'+ 
+   '<details><summary>예약·참가자 정보 수정 (변경 이력 보존)</summary><form data-v2-edit="'+esc(p.id)+'"><div class="formgrid">'+
+   '<div class="field"><label>참가자 코드</label><input name="code" required maxlength="30" value="'+esc(p.code)+'"></div>'+
+   '<div class="field"><label>실험자 코드</label><input name="researcherCode" required maxlength="40" value="'+esc(p.researcherCode)+'"></div>'+
+   '<div class="field"><label>예약 일시</label><input type="datetime-local" name="scheduledAt" required value="'+esc(p.scheduledAt)+'"></div></div>'+
+   '<div class="field"><label>특이사항</label><textarea name="notes" maxlength="2000">'+esc(p.notes||'')+'</textarea></div>'+
+   '<button type="submit" class="btn secondary">정보 변경 및 수정 이력 저장</button></form></details>'+ 
    '<details><summary>청각 설문 문항·선택지 수정 (환경 순서는 고정)</summary><form data-v2-audio-edit="'+esc(p.id)+'"><div class="field"><label>문항</label><input name="audioQuestion" maxlength="300" value="'+esc(p.audioQuestion||'')+'"></div><div class="field"><label>선택지 5개 (한 줄씩)</label><textarea name="audioOptions" rows="5">'+esc((p.audioOptions||[]).join('\n'))+'</textarea></div><button type="submit" class="btn secondary">설문 문항 저장</button></form></details></div>').join('');
  }
  function refreshRegistration(){
@@ -241,6 +247,36 @@ export function installYurifV2({auth,store}){
  setInterval(()=>{endTimed().catch(()=>{});const el=$('v2-countdown'),p=state.progress;
   if(el&&p?.startedAt){const remaining=(p.phase==='rest'?30:60)-Math.floor((Date.now()-p.startedAt)/1000);el.textContent='남은 시간 '+Math.max(0,remaining)+'초';}
  },500);
+ document.addEventListener('submit',async e=>{
+  const form=e.target.closest('[data-v2-edit]');if(!form)return;
+  e.preventDefault();const plan=state.list.find(x=>x.id===form.dataset.v2Edit);if(!plan)return;
+  const data=Object.fromEntries(new FormData(form)),updated={
+   code:String(data.code||'').trim(),researcherCode:String(data.researcherCode||'').trim(),
+   scheduledAt:String(data.scheduledAt||''),notes:String(data.notes||'').trim()
+  };
+  if(!updated.code||!updated.researcherCode||!updated.scheduledAt)return alert('필수 정보를 확인해 주세요.');
+  if(state.list.some(x=>x.id!==plan.id&&x.code===updated.code&&x.active!==false))return alert('다른 활성 실험에서 사용하는 참가자 코드입니다.');
+  if(!confirm('참가자·예약 정보를 수정하고 변경 이력을 기록할까요? 감각 환경 순서는 그대로 유지됩니다.'))return;
+  const button=form.querySelector('button[type=submit]');button.disabled=true;
+  try{
+   const batch=writeBatch(store),changes={};
+   for(const k of Object.keys(updated))if(updated[k]!==String(plan[k]||''))changes[k]={before:plan[k]||'',after:updated[k]};
+   if(!Object.keys(changes).length)return alert('변경된 내용이 없습니다.');
+   batch.update(doc(plans,plan.id),updated);
+   if('code' in changes){
+    batch.update(doc(store,'participantAccess',plan.accessKey),{code:updated.code});
+    batch.update(refProgress(plan.accessKey),{code:updated.code,updatedAt:serverTimestamp()});
+   }
+   batch.set(doc(store,'experimentsV2',plan.id,'audit',crypto.randomUUID()),{
+    event:'metadata_updated',changes,actorUid:auth.currentUser.uid,at:serverTimestamp()
+   });
+   await batch.commit();
+   const confirmed=await getDocFromServer(doc(plans,plan.id));
+   if(!confirmed.exists()||confirmed.data().code!==updated.code)throw Error('변경 내용 서버 확인 실패');
+   alert('연결된 참가자·실험 정보 및 변경 이력 저장 완료');
+  }catch(err){alert('실험 정보 수정 실패: '+String(err.message||err))}
+  finally{button.disabled=false}
+ });
  document.addEventListener('submit',async e=>{
   const form=e.target.closest('[data-v2-audio-edit]');if(!form)return;
   e.preventDefault();
