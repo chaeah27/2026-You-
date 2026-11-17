@@ -117,7 +117,7 @@ export function installYurifV2({auth,store}){
    p.order?.slice(0,4).map(x=>x.name).join(' > '),p.order?.slice(4,8).map(x=>x.name).join(' > '),p.order?.slice(8).map(x=>x.name).join(' > ')]);
   const blob=new Blob(['\\ufeff'+[headers,...rows].map(r=>r.map(csv).join(',')).join('\\r\\n')],{type:'text/csv;charset=utf-8'});
   const a=document.createElement('a'),url=URL.createObjectURL(blob);
-  a.href=url;a.download='yurif-experiments-v2.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  a.href=url;a.download='eureka-research-experiments-v2.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
  }
  function selectExperiment(id){
   if(state.selected===id)return;
@@ -614,7 +614,7 @@ export function installYurifV2({auth,store}){
   const csv=['participant_code,experiment_id,'+cols.join(','),
    ...analysisRows().map(row=>[plan.code,plan.id,...cols.map(c=>row[c])].map(escCsv).join(','))].join('\r\n');
   const blob=new Blob(['\ufeff'+csv],{type:'text/csv;charset=utf-8'}),url=URL.createObjectURL(blob);
-  const a=document.createElement('a');a.href=url;a.download='yurif-session-'+plan.code+'-'+plan.id+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
+  const a=document.createElement('a');a.href=url;a.download='eureka-research-session-'+plan.code+'-'+plan.id+'.csv';a.click();setTimeout(()=>URL.revokeObjectURL(url),2000);
  }
  document.addEventListener('click',async e=>{
   if(e.target.id==='v2-session-load'){
