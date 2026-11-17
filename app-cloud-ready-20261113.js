@@ -422,6 +422,7 @@ function labModeName(mode){return mode==='pilot'?'개인 예비실험':mode==='s
 function labDraftView(){
  if(!labDraft)return '<div class="empty">실험을 시작하려면 아래에서 실험 종류를 선택하세요.</div>';
  const d=labDraft,active=d.steps.findIndex(x=>x.startedAt&&!x.endedAt),done=d.steps.filter(x=>x.endedAt).length;
+ if(d.v2)return '<section class="panel"><h2>확정 1차 실험 진행 · '+esc(d.code)+'</h2><p class="muted">구간 전환은 위의 확정 실험 진행 패널에서만 합니다. 구형 수동 다음 구간 버튼은 비활성화되어 있습니다.</p><p>시작한 구간 '+d.steps.filter(x=>x.startedAt).length+'/21 · 종료한 구간 '+done+'/21 · ADC '+(d.gsrSamples?.length||0)+'개</p></section>';
  const mode=labModeName(d.mode),running=d.startedAt&&!d.endedAt;
  const table=d.steps.map((s,i)=>'<div class="lab-segment '+(i===active?'lab-segment-active':'')+'"><div class="lab-segment-badge">'+esc(s.label)+'</div><div><strong>'+esc(s.name)+'</strong><small>'+esc(s.envName||'환경 미지정')+' · 목표 '+Number(s.target||0)+'초</small><small>기록 '+labDuration(s.startedAt,s.endedAt)+(s.note?' · '+esc(s.note):'')+'</small></div><div class="lab-segment-state">'+(s.endedAt?'완료':i===active?'진행 중':'대기')+'</div></div>').join('');
  return '<section class="panel"><h2>현재 실험 · '+esc(mode)+'</h2><p class="muted">'+esc(d.code)+' · '+esc(d.date)+' · '+(running?'실험 진행 중':'실험 준비 중')+'</p><div class="lab-timer" id="lab-timer">'+(active<0?'00:00':labDuration(d.steps[active].startedAt))+'</div><p class="muted" id="lab-active-label">'+(active<0?'구간 시작 전':'현재 구간 '+esc(d.steps[active].label)+' · '+esc(d.steps[active].name))+'</p><div class="actions">'+(!running?'<button class="btn" type="button" data-lab-action="start">▶ 실험 시작</button>':active>=0&&active<d.steps.length-1?'<button class="btn" type="button" data-lab-action="next">▶ 다음 구간 표시</button>':'')+(running?'<button class="btn secondary" type="button" data-lab-action="finish">■ 실험 종료·저장</button>':'')+'<button class="btn secondary" type="button" data-lab-action="discard">초안 폐기</button></div><div class="lab-segment-list">'+table+'</div>'+(active>=0?'<div class="field"><label>현재 구간 관찰 메모</label><textarea id="lab-current-note" placeholder="환경 변화, 체감 반응, 특이사항을 자유롭게 기록하세요.">'+esc(d.steps[active].note||'')+'</textarea><button class="btn secondary" type="button" data-lab-action="save-note">메모 저장</button></div>':'')+'<p class="muted">버튼을 누른 시각이 구간 경계로 저장됩니다. 환경 자체를 자동 전환하지는 않으며, Arduino USB 연결 시 해당 구간의 ADC 원시값도 자동으로 기록됩니다.</p></section>';
@@ -448,7 +449,7 @@ function lab(){
  const tabs='<div class="lab-tabs"><button type="button" data-lab-tab="pilot" class="'+(labArchiveTab==='pilot'?'active':'')+'">개인 예비실험</button><button type="button" data-lab-tab="stage1" class="'+(labArchiveTab==='stage1'?'active':'')+'">1차 실험</button><button type="button" data-lab-tab="stage2" class="'+(labArchiveTab==='stage2'?'active':'')+'">2차 실험</button></div>';
  return head('실험실','실험 환경의 순서를 미리 지정하고 버튼으로 구간 경계를 기록합니다. 개인 예비실험은 정식 결과와 완전히 분리해 보관합니다.','LAB / EXPERIMENT')+
  '<div class="notice">Arduino GSR 센서의 원시 ADC를 USB로 수집합니다. 피부전도도(µS) 환산은 보정 전까지 지원하지 않습니다. Apple Watch 실시간 연결도 아직 지원하지 않습니다. 측정 중 브라우저 탭과 컴퓨터를 켜 두세요.</div>'+
- (typeof gsrLabPanel==='function'?gsrLabPanel():'')+labSafetyPanel()+labSaveCheckPanel()+(labDraft?labDraftView():labEditor())+(window.yurifGsrSharedPanel?.()||'')+tabs+labArchive(labArchiveTab);
+ (typeof gsrLabPanel==='function'?gsrLabPanel():'')+labSafetyPanel()+(window.yurifV2?.labHtml?.()||'')+labSaveCheckPanel()+(labDraft?labDraftView():labEditor())+(window.yurifGsrSharedPanel?.()||'')+tabs+labArchive(labArchiveTab);
 }
 let labArchiveTab='pilot';
 function labTick(){
@@ -560,8 +561,41 @@ async function labFinish(){
   if(lastLabSaveCheck?.id===finished.id)recordLabSaveCheck({...lastLabSaveCheck,cloud:'failed'});
   alert('로컬 저장은 확인되었지만 Firebase 원시값 업로드는 실패했습니다: '+String(err?.message||err)+'\n원본은 현재 브라우저에 남아 있습니다. 실험실 아카이브의 팀 공유 버튼으로 다시 시도할 수 있습니다.');
  });
+ return true;
 }
-function render(){if(window.yurifCloud?.ready){const label=document.getElementById('cloud-status');if(label)label.textContent=window.yurifCloud.status||'팀 공유 연결됨'}document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let names={participants:'참가자·설문 관리',home:'연구 대시보드',protocol:'실험 설계·프로토콜',equipment:'장비·보정 관리',journal:'연구 일지',sessions:'실험 세션 기록',analysis:'분석·결과 정리',references:'참고문헌·링크',lab:'실험실',export:'데이터 백업'};document.getElementById('viewlabel').textContent=names[view];document.getElementById('content').innerHTML=({home,protocol,equipment,journal,sessions,analysis,references,lab,export:backup,participants:()=>window.yurifParticipantAdminHtml?.()||'<div class="panel">참가자 관리 기능을 연결 중입니다.</div>'}[view])();if(view==='participants')window.yurifParticipantAdminLoad?.();if(view==='sessions'){renderExperimenterResults();renderSessionViews();window.yurifParticipantAdminLoad?.()}if(view==='lab'&&!labDraft)labRenderStepEditor();if(view==='lab'&&typeof gsrRefresh==='function')gsrRefresh();window.scrollTo({top:0,behavior:'instant'});}
+/* v2 lab bridge: preserve all legacy archived data, write only a new isolated run. */
+window.yurifV2EnvironmentList=()=>Array.isArray(db.sensoryEnvironments)?db.sensoryEnvironments:[];
+window.yurifV2ConnectedSensor=()=>typeof gsrDevice!=='undefined'&&gsrDevice.connected===true;
+window.yurifV2PrepareLab=async(plan,segments)=>{
+ if(labDraft&&labDraft.id!==plan.id)throw Error('다른 실험 초안이 존재합니다. 먼저 해당 기록을 백업·종료한 뒤 진행해 주세요.');
+ if(labDraft?.id===plan.id)return;
+ if(db.labRuns.some(x=>x.id===plan.id))throw Error('이미 저장된 실험입니다. 기존 실험 기록을 덮어쓸 수 없습니다.');
+ labDraft={id:plan.id,v2:true,mode:'stage1',code:plan.code,researcherCode:plan.researcherCode,
+  date:dateNow(),startedAt:null,endedAt:null,gsrSamples:[],
+  steps:segments.map(s=>({label:s.label,name:s.name,type:s.kind,position:s.position,
+   envId:s.envId||'',envName:s.kind==='stimulus'?s.name:'',target:s.duration,
+   startedAt:null,endedAt:null,note:''}))};
+ labSaveDraft();render();
+};
+window.yurifV2StepStart=(plan,index,time)=>{
+ if(!labDraft?.v2||labDraft.id!==plan.id||!labDraft.steps[index])throw Error('로컬 실험 초안이 없습니다.');
+ if(index===0&&!labDraft.startedAt)labDraft.startedAt=time;
+ if(labDraft.steps.some((s,i)=>i!==index&&s.startedAt&&!s.endedAt))
+   throw Error('이전 측정 구간이 아직 열려 있습니다.');
+ if(labDraft.steps[index].startedAt)throw Error('이미 시작된 구간은 다시 시작할 수 없습니다.');
+ labDraft.steps[index].startedAt=time;labSaveDraft();render();
+};
+window.yurifV2StepEnd=(plan,index,time)=>{
+ if(!labDraft?.v2||labDraft.id!==plan.id)throw Error('로컬 실험 기록을 찾을 수 없습니다.');
+ const segment=labDraft.steps[index];
+ if(!segment?.startedAt)throw Error('시작되지 않은 구간입니다.');
+ if(!segment.endedAt){segment.endedAt=time;labSaveDraft();}
+};
+window.yurifV2FinishLab=async()=>{
+ if(!labDraft?.v2||!labDraft.steps.every(s=>s.startedAt&&s.endedAt))throw Error('21개 측정 구간이 모두 완료되지 않았습니다.');
+ return await labFinish();
+};
+function render(){if(window.yurifCloud?.ready){const label=document.getElementById('cloud-status');if(label)label.textContent=window.yurifCloud.status||'팀 공유 연결됨'}document.querySelectorAll('#nav button').forEach(b=>b.classList.toggle('active',b.dataset.view===view));let names={registration:'실험 등록',participants:'참가자·설문 관리',home:'연구 대시보드',protocol:'실험 설계·프로토콜',equipment:'장비·보정 관리',journal:'연구 일지',sessions:'실험 세션 기록',analysis:'분석·결과 정리',references:'참고문헌·링크',lab:'실험실',export:'데이터 백업'};document.getElementById('viewlabel').textContent=names[view];document.getElementById('content').innerHTML=({home,protocol,equipment,journal,sessions,analysis,references,lab,registration:()=>window.yurifV2?.registrationHtml?.()||'<p>실험 등록 연결 중</p>',export:backup,participants:()=>window.yurifParticipantAdminHtml?.()||'<div class="panel">참가자 관리 기능을 연결 중입니다.</div>'}[view])();if(view==='participants')window.yurifParticipantAdminLoad?.();if(view==='sessions'){renderExperimenterResults();renderSessionViews();window.yurifParticipantAdminLoad?.()}if(view==='lab'&&!labDraft)labRenderStepEditor();if(view==='lab'&&typeof gsrRefresh==='function')gsrRefresh();window.scrollTo({top:0,behavior:'instant'});}
 window.yurifParticipantAdminRefreshView=()=>{if(view==='participants')document.getElementById('content').innerHTML=window.yurifParticipantAdminHtml?.()||''};
 function route(v){view=v;render()}window.route=route;window.exportJSON=exportJSON;
 window.yurifCloudApply=(type,records)=>{if(!Array.isArray(records)||!Object.hasOwn(defaults,type))return;if(type==='pilotRuns')return;const prior=new Map((db[type]||[]).filter(x=>x?.id!=null).map(x=>[String(x.id),x]));db[type]=records.map(record=>{const own=prior.get(String(record.id));const merged={...record};if(own&&Array.isArray(own.gsrSamples)&&!Array.isArray(merged.gsrSamples))merged.gsrSamples=own.gsrSamples;if(own&&Array.isArray(own.gsrRawSamples)&&!Array.isArray(merged.gsrRawSamples))merged.gsrRawSamples=own.gsrRawSamples;return merged});try{localStorage.setItem(KEY,JSON.stringify(db))}catch{}if(document.getElementById('content'))render()};
