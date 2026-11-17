@@ -120,7 +120,7 @@ service cloud.firestore {
    allow update: if isMember()
     && request.resource.data.experimentId == resource.data.experimentId
     && request.resource.data.code == resource.data.code
-    && request.resource.data.phase in ['registered','measurement','restReady','rest','setup','survey','completed','aborted'];
+    && request.resource.data.phase in ['registered','measurement','restReady','rest','setup','survey','completed','aborted','sensorError'];
    allow delete: if false;
   }
   // Each survey answer is immutable; the participant may submit only
