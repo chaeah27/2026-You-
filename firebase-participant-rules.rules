@@ -42,7 +42,12 @@ service cloud.firestore {
    allow get: if request.auth != null;
    allow list: if isMember();
    allow create: if isMember();
-   allow update: if isAdmin();
+   allow update: if isAdmin() || (isMember()
+    && resource.data.v2 == true
+    && request.resource.data.v2 == true
+    && request.resource.data.diff(resource.data).affectedKeys().hasOnly(['audioQuestion','audioOptions'])
+    && request.resource.data.code == resource.data.code
+    && request.resource.data.order == resource.data.order);
    allow delete: if false;
   }
   match /participantConsents/{token}{
@@ -111,8 +116,7 @@ service cloud.firestore {
   match /experimentProgress/{token}{
    allow get: if isMember() || agreed(token);
    allow list: if isMember();
-   allow create: if isMember()
-    && exists(/databases/$(database)/documents/participantAccess/$(token));
+   allow create: if isMember();
    allow update: if isMember()
     && request.resource.data.experimentId == resource.data.experimentId
     && request.resource.data.code == resource.data.code
