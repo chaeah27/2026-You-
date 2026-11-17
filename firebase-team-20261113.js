@@ -60,7 +60,7 @@ function cleanup(){
  $('workspace').hidden=true;$('admin-drawer').hidden=true;
 }
 onAuthStateChanged(auth,async user=>{
- if(user?.isAnonymous){show('participant-screen');return}
+ if(user?.isAnonymous){if(!$('participant-screen').hidden)return;show('entry-screen');return}
  if(!user){if(state.ready)cleanup();return}
  if(state.started)return;
  state.started=true;error('관리자·연구원 권한 확인 중…');
@@ -388,8 +388,10 @@ $('researcher-signup-form').addEventListener('submit',async e=>{
   const result=await createUserWithEmailAndPassword(auth,email,password);
   const uid=result.user.uid;
   $('signup-message').textContent='계정이 생성되었습니다. 관리자에게 다음 UID를 전달하세요: '+uid+' / 관리자 승인 후 로그인할 수 있습니다.';
+  window.yurifLastSignupUid=uid;
   await signOut(auth);
   show('login-screen');
+  $('signup-message').textContent='계정 생성 완료 · 승인 대기. 관리자에게 UID '+uid+' 를 전달해 주세요.';
  }catch(ex){$('signup-message').textContent='계정 생성 실패: '+friendly(ex)}
  finally{researcherSigningUp=false;btn.disabled=false;$('signup-password').value=''}
 });
