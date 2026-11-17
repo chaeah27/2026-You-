@@ -338,3 +338,19 @@ input:focus,textarea:focus,select:focus{outline-color:#D9EAF6;border-color:#79B6
 #participant-admin-list code{overflow-wrap:anywhere;user-select:all}
 #participant-admin-results .tablewrap,#participant-session-results .tablewrap{overflow:auto}
 #participant-plan-form .field{margin-bottom:12px}
+
+/* Three entrance options, researcher onboarding and team roles */
+@media(min-width:1000px){.yurif-entrance-grid{grid-template-columns:repeat(3,minmax(0,1fr))}.yurif-choice{min-height:300px;padding:23px}.yurif-choice h2{font-size:20px}}
+@media(max-width:999px) and (min-width:650px){.yurif-entrance-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:649px){.yurif-entrance-grid{grid-template-columns:1fr}}
+.yurif-researcher-signup{margin-top:18px;border-top:1px solid #e3edf5;padding-top:15px}
+.yurif-researcher-signup summary{cursor:pointer;font-weight:700;color:#243f60}
+.yurif-researcher-signup p{font-size:13px;line-height:1.65;color:#647f96}
+.yurif-researcher-signup form{padding-top:14px}
+#signup-message{font-size:13px;overflow-wrap:anywhere;line-height:1.65}
+.yurif-admin-members{border-top:1px solid #dde7f0;margin-top:24px;padding-top:20px}
+.yurif-admin-members h3{margin:0 0 12px}
+.yurif-admin-members form{display:grid;gap:10px;max-width:650px}
+.yurif-admin-members input{width:100%;border:1px solid #cfdeea;border-radius:8px;padding:10px}
+.yurif-member-row{border:1px solid #e1eaf3;border-radius:9px;display:flex;flex-wrap:wrap;gap:10px;align-items:center;padding:12px;margin:8px 0;font-size:13px}
+.yurif-member-row code{overflow-wrap:anywhere;max-width:100%}
