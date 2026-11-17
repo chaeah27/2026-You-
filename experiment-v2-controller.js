@@ -162,7 +162,7 @@ export function installYurifV2({auth,store}){
   }
   if(kind==='sensorError')action='<p role="alert">측정 중 센서 연결이 끊어졌습니다. 재연결 후 해당 구간을 재측정하거나 실험을 중단하세요. 이전 샘플은 삭제하지 않습니다.</p>'+btn('retry','센서 연결 후 해당 구간 재측정')+btn('abort','실험 중단 · 기록 보존');
   if(kind==='completed')action='<p>측정 기록 종료됨. 저장 상태와 세션 기록을 확인하세요.</p>';
-  const last=n>=0?'현재 환경: '+esc(plan.order[n]?.name||''):'초기 안정 상태';
+  const last=(kind==='setup'||(kind==='survey'&&uploaded&&n<9))?'다음 환경: '+esc(plan.order[n+1]?.name||''):(kind==='restReady'?'지금 시작할 구간: '+esc(plan.order[n]?.name||'')+' 이후 30초 휴식':n>=0?'현재 환경: '+esc(plan.order[n]?.name||''):'초기 안정 상태');
   return '<p><strong>진행 상태: '+esc(phaseLabel(p))+'</strong> · '+last+'</p>'+
    '<p class="muted">ADC 실시간 연결·구간 기록 상태와 Firebase 업로드 검증 결과를 각각 확인해야 합니다.</p>'+
    (state.warning?'<p role="alert" class="notice">'+esc(state.warning)+'</p>':'')+
